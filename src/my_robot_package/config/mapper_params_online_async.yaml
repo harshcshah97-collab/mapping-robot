@@ -1,0 +1,52 @@
+slam_toolbox:
+  ros__parameters:
+    # Plugin params
+    solver_plugin: solver_plugins::CeresSolver
+    ceres_linear_solver: SPARSE_NORMAL_CHOLESKY
+    ceres_preconditioner: SCHUR_JACOBI
+    ceres_trust_strategy: LEVENBERG_MARQUARDT
+    
+    # ROS Parameters
+    odom_frame: odom
+    map_frame: map
+    base_frame: base_footprint
+    scan_topic: /scan
+    mode: mapping
+    
+    # --- CRITICAL TIMING FIXES ---
+    transform_timeout: 1.0       # Wait up to 1 second for TF (Default is 0.2)
+    tf_buffer_duration: 30.0     # Keep 30 seconds of TF history
+    throttle_scans: 1            # Process every scan (Change to 2 if Pi CPU is 100%)
+    
+    # Map Params
+    map_update_interval: 3.0
+    resolution: 0.05
+    max_laser_range: 12.0 # LD19 max range
+    minimum_time_interval: 0.5
+    transform_publish_period: 0.05
+
+    # --- ADD THIS BLOCK TO FIX OVERLAPPING ---
+    
+    # 1. MOTION THRESHOLDS (The "Don't Map Jitters" Fix)
+    # Only update the map if the robot moves 0.5m or turns 0.5 rad (~30 deg).
+    # This prevents the Lidar "Banana" distortion from being written to the map 
+    # while you are just wiggling in place.
+    minimum_travel_distance: 0.5
+    minimum_travel_heading: 0.5
+    
+    # 2. CORRELATION SEARCH (The "Slip" Fix)
+    # If the robot slips 0.2m, but the search window is only 0.5m, it creates a new wall.
+    # We increase this to 1.0m so it can "snap" to the old wall even if odometry is bad.
+    correlation_search_space_dimension: 1.0
+    correlation_search_space_resolution: 0.05
+    
+    # 3. LOOP CLOSURE (The "Snap" Fix)
+    # This is how far it searches to find a loop closure (e.g., recognizing the kitchen).
+    # 8.0 meters is usually good, but ensure it's explicitly set.
+    loop_search_space_dimension: 8.0
+    loop_search_space_resolution: 0.05
+    loop_match_minimum_chain_size: 10
+    
+    # 4. SCAN MATCHING (Trust the Math)
+    use_scan_matching: true      # <--- Explicitly turned ON!
+    use_scan_barycenter: true

@@ -1,0 +1,1 @@
+ros2 launch my_robot_package bringup_and_map.launch.py
