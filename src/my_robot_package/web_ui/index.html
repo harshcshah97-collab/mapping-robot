@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Robot Control UI</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #1e1e1e; color: #fff; }
+        .nav-tabs .nav-link { color: #aaa; }
+        .nav-tabs .nav-link.active { background-color: #333; color: #fff; border-color: #444; }
+        #map-container { display: flex; justify-content: center; margin-top: 15px; background: #2c2c2c; padding: 10px; border-radius: 8px;}
+        .control-btn.active { box-shadow: 0 0 10px 3px #0d6efd; }
+        .dpad-btn { width: 80px; height: 80px; font-size: 30px; display: flex; align-items: center; justify-content: center; user-select: none; touch-action: manipulation;}
+    </style>
+</head>
+<body>
+    <!-- Sensor Check Modal / Overlay -->
+    <div id="sensor-check-overlay" class="d-none position-fixed top-0 start-0 w-100 h-100 bg-dark bg-opacity-75 z-3 align-items-center justify-content-center" style="z-index: 1050;">
+        <div class="card bg-dark text-light border-secondary p-4 w-75" style="max-width: 400px;">
+            <h4 class="text-center mb-4">🔍 Sensor Diagnostic</h4>
+            <ul class="list-group list-group-flush fs-5">
+                <li class="list-group-item bg-dark text-light border-secondary d-flex justify-content-between">
+                    IMU (I2C 0x68) <span id="check-imu">⏳</span>
+                </li>
+                <li class="list-group-item bg-dark text-light border-secondary d-flex justify-content-between">
+                    Ultrasonic <span id="check-ultra">⏳</span>
+                </li>
+                <li class="list-group-item bg-dark text-light border-secondary d-flex justify-content-between">
+                    IR Left <span id="check-ir-left">⏳</span>
+                </li>
+                <li class="list-group-item bg-dark text-light border-secondary d-flex justify-content-between">
+                    IR Right <span id="check-ir-right">⏳</span>
+                </li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="container mt-4">
+        <h2 class="text-center mb-4">🤖 Robot Control Dashboard</h2>
+        
+        <div class="input-group mb-3">
+            <span class="input-group-text bg-dark text-white border-secondary">Robot IP</span>
+            <input type="text" id="robot-ip" class="form-control bg-dark text-white border-secondary" placeholder="e.g., 192.168.1.100">
+            <button class="btn btn-success" type="button" onclick="connectROS()">Connect</button>
+        </div>
+
+        <div id="status" class="alert alert-secondary text-center">Disconnected</div>
+
+        <ul class="nav nav-tabs" id="myTab" role="tablist">
+            <li class="nav-item"><button class="nav-link active" id="map-tab" data-bs-toggle="tab" data-bs-target="#map-view">Map & Nav</button></li>
+            <li class="nav-item"><button class="nav-link" id="teleop-tab" data-bs-toggle="tab" data-bs-target="#teleop-view">Teleop</button></li>
+            <li class="nav-item"><button class="nav-link" id="system-tab" data-bs-toggle="tab" data-bs-target="#system-view">System & WiFi</button></li>
+        </ul>
+
+        <div class="tab-content mt-3">
+            <!-- Map & Navigation Tab -->
+            <div class="tab-pane fade show active" id="map-view">
+                <div class="d-flex justify-content-center gap-3 mb-3">
+                    <button class="btn btn-primary" onclick="triggerAction('start_mapping')">Start Mapping</button>
+                    <button class="btn btn-success" onclick="triggerAction('start_navigation')">Start Navigation</button>
+                    <button class="btn btn-danger" onclick="triggerAction('stop')">Stop All</button>
+                    <button class="btn btn-info text-white" onclick="triggerAction('start_teleop')">Start Teleop</button>
+                </div>
+                <div class="d-flex justify-content-center gap-3">
+                    <button id="btn-pose" class="btn btn-outline-warning control-btn" onclick="setInteractionMode('pose')">📍 Set Initial Pose</button>
+                    <button id="btn-goal" class="btn btn-outline-info control-btn" onclick="setInteractionMode('goal')">🚩 Set Nav Goal</button>
+                </div>
+                <div id="goal-status" class="alert alert-info text-center mt-3 d-none">Waiting for goal...</div>
+                <p class="text-center text-muted mt-2"><small>Click and drag on the map to set position and direction.</small></p>
+                <div id="map-container">
+                    <div id="map"></div>
+                </div>
+            </div>
+
+            <!-- Teleop Tab -->
+            <div class="tab-pane fade" id="teleop-view">
+                <h4 class="text-center">Remote Drive</h4>
+                <div class="d-flex flex-column align-items-center mt-4">
+                    <button class="btn btn-secondary dpad-btn mb-2" id="btn-up">⬆️</button>
+                    <div class="d-flex justify-content-center gap-2 mb-2">
+                        <button class="btn btn-secondary dpad-btn" id="btn-left">⬅️</button>
+                        <button class="btn btn-danger dpad-btn" id="btn-stop">⏹️</button>
+                        <button class="btn btn-secondary dpad-btn" id="btn-right">➡️</button>
+                    </div>
+                    <button class="btn btn-secondary dpad-btn" id="btn-down">⬇️</button>
+                </div>
+            </div>
+
+            <!-- System Tab -->
+            <div class="tab-pane fade" id="system-view">
+                <div class="card bg-dark text-light p-4 mt-3 border-secondary">
+                    <h4 class="mb-3">Connect to New WiFi</h4>
+                    <div class="input-group mb-2">
+                        <select id="ssid" class="form-select bg-dark text-white border-secondary">
+                            <option value="">Loading networks...</option>
+                        </select>
+                        <button class="btn btn-outline-info text-white" type="button" id="scanWifiBtn">Scan</button>
+                    </div>
+                    <input type="password" id="password" class="form-control bg-dark text-white border-secondary mb-3" placeholder="Password">
+                    <button class="btn btn-info w-100 text-white" onclick="changeWifi()">Connect</button>
+                    <p class="text-warning mt-3 mb-0" id="wifiStatus"></p>
+                </div>
+
+                <div class="card bg-dark text-light p-4 mt-3 border-secondary text-center">
+                    <h4 class="mb-3">Power Management</h4>
+                    <div class="d-flex justify-content-center gap-3">
+                        <button onclick="powerAction('sleep')" class="btn btn-warning">Sleep</button>
+                        <button onclick="powerAction('reboot')" class="btn btn-info text-white">Reboot</button>
+                        <button onclick="powerAction('shutdown')" class="btn btn-danger">Shutdown</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <!-- Bootstrap -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- ROSLibJS & ROS2D Dependencies -->
+    <script src="https://cdn.jsdelivr.net/npm/eventemitter2@6/lib/eventemitter2.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/easeljs/lib/easeljs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/roslib@1/build/roslib.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/ros2d@0/build/ros2d.min.js"></script>
+    
+    <!-- Custom Application Logic -->
+    <script src="main.js"></script>
+</body>
+</html>

@@ -43,6 +43,7 @@ class WallFollower(Node):
 
         self.start_x = None
         self.start_y = None
+        self.start_time = None
         self.left_starting_zone = False
         self.map_complete = False
 
@@ -55,14 +56,18 @@ class WallFollower(Node):
         if self.start_x is None and self.start_y is None:
             self.start_x = current_x
             self.start_y = current_y
+            self.start_time = self.get_clock().now()
             return
         dist_from_start = math.hypot(current_x - self.start_x, current_y - self.start_y)
         if not self.left_starting_zone and dist_from_start > 2.5:
             self.left_starting_zone = True
             self.get_logger().info("Robot has left the starting zone. Return tracker ARMED.")
+            
+        elapsed_time = (self.get_clock().now() - self.start_time).nanoseconds / 1e9
         if self.left_starting_zone and not self.map_complete and dist_from_start < 0.5:
-            self.map_complete = True
-            self.get_logger().warn("LOOP CLOSED! Stopping motors to preserve map quality.")
+            if elapsed_time > 300.0:  # 5 minutes timer
+                self.map_complete = True
+                self.get_logger().warn("LOOP CLOSED! 5 minutes elapsed. Stopping motors to preserve map quality.")
 
     # --- UPDATED CALLBACKS: Store the raw range value ---
     def ir_left_cb(self, msg): 
@@ -128,7 +133,7 @@ class WallFollower(Node):
             self.escape_counter -= 1
             if self.escape_counter <= 0:
                 self.escape_phase = 2 
-                self.escape_counter = 8 
+                self.escape_counter = 25 
             return
         elif self.escape_phase == 2:
             msg.linear.x = 0.0 
@@ -142,12 +147,12 @@ class WallFollower(Node):
         if self.left_bumper.is_pressed or self.center_bumper.is_pressed:
             self.escape_phase = 1
             self.escape_counter = 10      
-            self.escape_turn_speed = -0.8 
+            self.escape_turn_speed = -0.4 
             return
         elif self.right_bumper.is_pressed:
             self.escape_phase = 1
             self.escape_counter = 10     
-            self.escape_turn_speed = 0.8  
+            self.escape_turn_speed = 0.4  
             return
 
         # --- 2. NON-CONTACT SENSOR OVERRIDE ---
@@ -158,9 +163,9 @@ class WallFollower(Node):
             true_right_clearance = min(self.right_dist, self.ir_right_dist)
             
             if true_left_clearance > true_right_clearance:
-                msg.angular.z = 0.6  
+                msg.angular.z = 0.4  
             else:
-                msg.angular.z = -0.6 
+                msg.angular.z = -0.4 
             self.publisher_.publish(msg)
             return
             

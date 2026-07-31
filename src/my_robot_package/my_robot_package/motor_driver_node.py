@@ -84,7 +84,7 @@ class MotorDriverNode(Node):
             return
 
         # If strong angular and small linear: turn in place
-        if abs(angular) > 0.3 and abs(linear) < 0.1:
+        if abs(angular) > 0.3 and abs(linear) < 0.02:
             if angular > 0:
                 self.turn_left_in_place()
                 self.get_logger().debug("Turning left in place")

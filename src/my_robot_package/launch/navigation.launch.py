@@ -24,7 +24,7 @@ def generate_launch_description():
     lidar_launch_file = os.path.join(pkg_share, 'launch', 'ld19.launch.py')
     
     # POINT TO YOUR SAVED MAP HERE
-    map_file = os.path.expanduser('/home/harsh/ros2_ws/src/my_robot_package/maps/my_house_map_0509_2.yaml')
+    map_file = os.path.expanduser('/home/harsh/ros2_ws/src/my_robot_package/maps/my_house_map_0515.yaml')
     nav2_params_file = os.path.join(pkg_share, 'config', 'nav2_params.yaml')
 
     with open(urdf_file, 'r') as infp:
@@ -41,9 +41,9 @@ def generate_launch_description():
         ),
 
         # 2. Hardware: Lidar
-        IncludeLaunchDescription(
-            PythonLaunchDescriptionSource(lidar_launch_file)
-        ),
+        # IncludeLaunchDescription(
+        #     PythonLaunchDescriptionSource(lidar_launch_file)
+        # ),
 
         # 3. Hardware: Motor Driver
         Node(
@@ -111,7 +111,10 @@ def generate_launch_description():
             package='my_robot_package',
             executable='bumper_node',
             name='bumper_node',
-            output='screen'
+            output='screen',
+            parameters=[{
+                'frame_id': 'base_footprint' 
+            }]
         ),
 
         # 6. Foxglove Bridge

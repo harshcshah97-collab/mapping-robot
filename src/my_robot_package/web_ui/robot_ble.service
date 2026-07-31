@@ -1,0 +1,18 @@
+[Unit]
+Description=Robot BLE Wi-Fi Setup Service
+After=network.target bluetooth.service bluetooth.target
+Requires=bluetooth.service
+
+[Service]
+Type=simple
+User=harsh
+Environment="LANG=en_US.UTF-8"
+Environment="PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+WorkingDirectory=/home/harsh/ros2_ws/src/my_robot_package/web_ui
+ExecStartPre=+/usr/sbin/rfkill unblock bluetooth
+ExecStart=/usr/bin/python3 -u /home/harsh/ros2_ws/src/my_robot_package/web_ui/ble_wifi_scanner.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

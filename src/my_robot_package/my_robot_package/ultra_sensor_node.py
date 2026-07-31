@@ -47,7 +47,10 @@ class UltraSensorNode(Node):
         msg.max_range = 2.0       # 2 meters
         
         # 3. THE DATA (Must be in Meters)
-        msg.range = float(current_distance)
+        if current_distance >= 1.95: # Close to max distance means no echo / out of range
+            msg.range = float('inf')
+        else:
+            msg.range = float(current_distance)
 
         self.publisher_.publish(msg)
 
