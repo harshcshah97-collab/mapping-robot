@@ -1,0 +1,42 @@
+/**:
+  ros__parameters:
+    # Safe default: detect and publish status, but do not move until commanded.
+    initial_mode: idle
+    model: "luxonis/yolov6-nano:r2-coco-512x288"
+
+    target_distance_m: 1.5
+    distance_deadband_m: 0.20
+    center_deadband: 0.10
+    smoothing_alpha: 0.30
+
+    # Independent wheel PWM permits slow visual-servo arcs while keeping the
+    # target in frame. Final values still need on-robot tuning.
+    turn_speed: 0.40
+    follow_speed: 0.12
+    control_rate_hz: 15.0
+    target_timeout_sec: 0.8
+
+    minimum_valid_depth_m: 0.30
+    maximum_valid_depth_m: 6.0
+
+    front_sector_degrees: 50.0
+    lidar_stop_distance_m: 0.40
+    range_stop_distance_m: 0.30
+    sensor_timeout_sec: 1.0
+    bumper_hold_sec: 1.0
+    require_lidar: true
+    motion_enabled: true
+
+    publish_preview: true
+    publish_pointcloud: false
+    pointcloud_decimation: 8
+    recording_fps: 15.0
+    max_recording_duration_sec: 600.0
+    minimum_free_disk_mb: 512.0
+    recording_directory: "~/robot_recordings"
+
+    # This is a local clothing-color signature, not face recognition. Enroll in
+    # roughly the same lighting/clothing expected during the session.
+    reidentification_enabled: true
+    reid_match_threshold: 0.35
+    enrollment_file: "~/.config/mapping-robot/target_enrollment.json"

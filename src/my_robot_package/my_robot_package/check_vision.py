@@ -1,33 +1,34 @@
-import depthai as dai
 import cv2
+import depthai as dai
 import time
 
-print("--- OAK-D Vision Check ---")
 
-with dai.Pipeline() as pipeline:
-    # 1. Create a standard camera node
-    camRgb = pipeline.create(dai.node.Camera).build()
-    
-    # 2. Request a standard 720p image formatted for OpenCV (BGR Interleaved)
-    camOutput = camRgb.requestOutput((1280, 720), type=dai.ImgFrame.Type.BGR888i)
-    
-    # 3. Create a queue to pull the frame to the Pi
-    qRgb = camOutput.createOutputQueue(maxSize=1, blocking=True)
+def main():
+    """Capture one RGB frame as a simple OAK-D hardware diagnostic."""
+    print("--- OAK-D Vision Check ---")
+    try:
+        with dai.Pipeline() as pipeline:
+            camera = pipeline.create(dai.node.Camera).build()
+            output = camera.requestOutput(
+                (1280, 720), type=dai.ImgFrame.Type.BGR888i
+            )
+            queue = output.createOutputQueue(maxSize=1, blocking=True)
 
-    print("Waking up camera...")
-    pipeline.start()
-    
-    print("Adjusting auto-exposure (waiting 2 seconds)...")
-    time.sleep(2) 
+            print("Waking up camera...")
+            pipeline.start()
+            time.sleep(2)
+            frame = queue.get().getCvFrame()
+    except RuntimeError as error:
+        print(f"Could not use the OAK-D camera: {error}")
+        return 1
 
-    print("Taking picture...")
-    # Grab the frame from the queue
-    inRgb = qRgb.get()
-    
-    # Convert it to a standard OpenCV image matrix
-    frame = inRgb.getCvFrame()
-
-    # Save the image to the SD card
     filename = "vision_test.jpg"
-    cv2.imwrite(filename, frame)
+    if not cv2.imwrite(filename, frame):
+        print(f"Could not save '{filename}'.")
+        return 1
     print(f"Success! Image saved as '{filename}' in your current directory.")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

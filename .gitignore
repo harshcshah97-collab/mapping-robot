@@ -1,3 +1,10 @@
 build/
 install/
 log/
+*.log
+navigation_log
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+robot_recordings/

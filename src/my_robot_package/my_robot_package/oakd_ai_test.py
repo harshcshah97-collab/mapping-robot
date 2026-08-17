@@ -9,50 +9,49 @@ LABEL_MAP = {
     16: "pottedplant", 17: "sheep", 18: "sofa", 19: "train", 20: "tvmonitor"
 }
 
-print("--- OAK-D AI Sanity Check (V3 Native) ---")
 
-with dai.Pipeline() as pipeline:
-    
-    print("Building camera and fetching AI model natively...")
-    # 1. Create the universal Camera node
-    cameraNode = pipeline.create(dai.node.Camera).build()
-    
-    # 2. Use V3's native Model Zoo! 
-    # This automatically downloads the blob, sets the BGR format, links the camera, and configures the SSD decoder.
-    model_description = dai.NNModelDescription("luxonis/mobilenet-ssd:300x300")
-    detectionNetwork = pipeline.create(dai.node.DetectionNetwork).build(cameraNode, model_description)
-    
-    # Lower the confidence to 20% so we can see what the AI is guessing
-    detectionNetwork.setConfidenceThreshold(0.2)
-
-    # 3. Create the queue directly from the network output
-    qDet = detectionNetwork.out.createOutputQueue(maxSize=4, blocking=False)
-
-    print("Connecting to OAK-D camera...")
+def main():
+    """Run live on-device object detections as a DepthAI v3 diagnostic."""
+    print("--- OAK-D AI Sanity Check (V3 Native) ---")
     try:
-        pipeline.start()
-        print("OAK-D connected successfully. Starting pipeline...")
-        print("--- Live Detections ---")
-        print("Point the camera at objects. Press Ctrl+C to exit.")
-        
-        while pipeline.isRunning():
-            # Check for new detections
-            inDet = qDet.tryGet()
+        with dai.Pipeline() as pipeline:
+            print("Building camera and fetching AI model natively...")
+            camera = pipeline.create(dai.node.Camera).build()
+            model = dai.NNModelDescription(
+                "luxonis/mobilenet-ssd:300x300"
+            )
+            network = pipeline.create(dai.node.DetectionNetwork).build(
+                camera, model
+            )
+            network.setConfidenceThreshold(0.2)
+            detections = network.out.createOutputQueue(
+                maxSize=4, blocking=False
+            )
 
-            if inDet is not None:
-                if len(inDet.detections) > 0:
-                    print("---") 
-                    for detection in inDet.detections:
-                        # Map the numerical label to the string name
-                        label = LABEL_MAP.get(detection.label, f"Label {detection.label}")
-                        confidence = detection.confidence
-                        print(f"Found: {label:<15} | Confidence: {confidence:.2f}")
-            
-            time.sleep(0.1)
-
-    except RuntimeError as e:
-        print(f"FATAL: Could not connect to the OAK-D camera.\nError: '{e}'")
-        print("Ensure the camera is plugged in and not in use by another process.")
-        exit(1)
+            print("Connecting to OAK-D camera...")
+            pipeline.start()
+            print("Point the camera at objects. Press Ctrl+C to exit.")
+            while pipeline.isRunning():
+                packet = detections.tryGet()
+                if packet is not None and packet.detections:
+                    print("---")
+                    for detection in packet.detections:
+                        label = LABEL_MAP.get(
+                            detection.label, f"Label {detection.label}"
+                        )
+                        print(
+                            f"Found: {label:<15} | "
+                            f"Confidence: {detection.confidence:.2f}"
+                        )
+                time.sleep(0.1)
+    except RuntimeError as error:
+        print(f"FATAL: Could not connect to the OAK-D camera: {error}")
+        print("Ensure the camera is plugged in and not used by another process.")
+        return 1
     except KeyboardInterrupt:
         print("\n--- Test finished. ---")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

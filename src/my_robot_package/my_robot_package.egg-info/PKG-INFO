@@ -1,6 +1,0 @@
-Metadata-Version: 2.1
-Name: my-robot-package
-Version: 0.0.1
-Summary: Robot bringup, SLAM, and Nav2 wrappers
-Maintainer: you
-Maintainer-email: you@example.com

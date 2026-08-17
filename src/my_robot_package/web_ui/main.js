@@ -2,6 +2,16 @@ let ros = null;
 let viewer = null;
 let gridClient = null;
 let cmdVelTopic = null;
+let trackingCommandTopic = null;
+let activeRobotMode = 'unknown';
+
+function currentRosTime() {
+    const milliseconds = Date.now();
+    return {
+        sec: Math.floor(milliseconds / 1000),
+        nanosec: (milliseconds % 1000) * 1000000
+    };
+}
 
 // Automatically fill in the IP of the server if accessed remotely
 document.getElementById('robot-ip').value = window.location.hostname || "127.0.0.1";
@@ -41,6 +51,7 @@ function triggerAction(action) {
     fetch('/api/' + action, { method: 'POST' })
         .then(res => res.json())
         .then(data => {
+            if (data.mode) activeRobotMode = data.mode;
             alert(data.message);
             if (action === 'start_mapping' || action === 'start_navigation') {
                 // Wait 5 seconds for nodes to spin up, then check sensors
@@ -48,6 +59,18 @@ function triggerAction(action) {
             }
         })
         .catch(err => alert("Error triggering action: " + err));
+}
+
+function sendTrackingCommand(command) {
+    if (!trackingCommandTopic || !ros || !ros.isConnected) {
+        alert('Connect to ROS before sending a tracking command.');
+        return;
+    }
+    if (activeRobotMode !== 'tracking') {
+        alert('Start Tracking Mode before sending camera motion commands.');
+        return;
+    }
+    trackingCommandTopic.publish(new ROSLIB.Message({ data: command }));
 }
 
 function runSensorCheck() {
@@ -85,6 +108,14 @@ function runSensorCheck() {
             if (!sensors.irRight) { document.getElementById('check-ir-right').innerText = '❌'; irRightTopic.unsubscribe(); }
             setTimeout(() => { overlay.classList.remove('d-flex'); overlay.classList.add('d-none'); }, 3000);
         }, 5000);
+    } else {
+        document.getElementById('check-ultra').innerText = '❌';
+        document.getElementById('check-ir-left').innerText = '❌';
+        document.getElementById('check-ir-right').innerText = '❌';
+        setTimeout(() => {
+            overlay.classList.remove('d-flex');
+            overlay.classList.add('d-none');
+        }, 3000);
     }
 }
 
@@ -220,6 +251,21 @@ function setupROSInterfaces() {
         name: '/cmd_vel', 
         messageType: 'geometry_msgs/msg/Twist' 
     });
+
+    trackingCommandTopic = new ROSLIB.Topic({
+        ros: ros,
+        name: '/tracking/command',
+        messageType: 'std_msgs/msg/String'
+    });
+    const trackingStatusTopic = new ROSLIB.Topic({
+        ros: ros,
+        name: '/tracking/status',
+        messageType: 'std_msgs/msg/String'
+    });
+    trackingStatusTopic.subscribe((message) => {
+        const element = document.getElementById('tracking-status');
+        if (element) element.innerText = message.data;
+    });
 }
 
 // Map Interaction: Click and Drag to set Pose/Goal
@@ -227,6 +273,10 @@ let interactionMode = null;
 let mouseDownPos = null;
 
 function setInteractionMode(mode) {
+    if (activeRobotMode !== 'navigation') {
+        alert('Start Navigation mode before setting a pose or goal.');
+        return;
+    }
     interactionMode = mode;
     document.getElementById('btn-pose').classList.toggle('active', mode === 'pose');
     document.getElementById('btn-goal').classList.toggle('active', mode === 'goal');
@@ -256,17 +306,31 @@ window.onload = () => {
                 if (interactionMode === 'pose') {
                     let topic = new ROSLIB.Topic({ ros: ros, name: '/initialpose', messageType: 'geometry_msgs/msg/PoseWithCovarianceStamped' });
                     let msg = new ROSLIB.Message({
-                        header: { frame_id: 'map' },
+                        header: { stamp: currentRosTime(), frame_id: 'map' },
                         pose: { pose: { position: { x: mouseDownPos.x, y: mouseDownPos.y, z: 0.0 }, orientation: q }, covariance: [0.25,0,0,0,0,0,0,0.25,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.068] }
                     });
                     topic.publish(msg);
                 } else if (interactionMode === 'goal') {
-                    let topic = new ROSLIB.Topic({ ros: ros, name: '/goal_pose', messageType: 'geometry_msgs/msg/PoseStamped' });
-                    let msg = new ROSLIB.Message({
-                        header: { frame_id: 'map' },
-                        pose: { position: { x: mouseDownPos.x, y: mouseDownPos.y, z: 0.0 }, orientation: q }
+                    // Nav2 accepts navigation requests through its action server,
+                    // not by subscribing to a /goal_pose topic.
+                    const goalId = 'web-nav-' + Date.now();
+                    ros.callOnConnection({
+                        op: 'send_action_goal',
+                        id: goalId,
+                        action: '/navigate_to_pose',
+                        action_type: 'nav2_msgs/action/NavigateToPose',
+                        feedback: true,
+                        args: {
+                            pose: {
+                                header: { stamp: currentRosTime(), frame_id: 'map' },
+                                pose: {
+                                    position: { x: mouseDownPos.x, y: mouseDownPos.y, z: 0.0 },
+                                    orientation: q
+                                }
+                            },
+                            behavior_tree: ''
+                        }
                     });
-                    topic.publish(msg);
                 }
                 
                 setInteractionMode(null);
@@ -286,6 +350,10 @@ window.onload = () => {
 
     function startMoving(linear, angular) {
         if (!cmdVelTopic) return;
+        if (activeRobotMode !== 'teleop') {
+            alert('Start Teleop mode before using the drive pad.');
+            return;
+        }
         if (moveInterval) clearInterval(moveInterval);
         const msg = new ROSLIB.Message({ linear: { x: linear, y: 0.0, z: 0.0 }, angular: { x: 0.0, y: 0.0, z: angular } });
         cmdVelTopic.publish(msg);
@@ -307,6 +375,7 @@ window.onload = () => {
         element.addEventListener('mouseleave', stopMoving);
         element.addEventListener('touchstart', (e) => { e.preventDefault(); startMoving(linear, angular); }, {passive: false});
         element.addEventListener('touchend', (e) => { e.preventDefault(); stopMoving(); }, {passive: false});
+        element.addEventListener('touchcancel', stopMoving);
     };
 
     addControl(btnUp, 0.22, 0.0);
@@ -318,6 +387,11 @@ window.onload = () => {
         btnStop.addEventListener('click', stopMoving);
         btnStop.addEventListener('touchstart', (e) => { e.preventDefault(); stopMoving(); }, {passive: false});
     }
+
+    window.addEventListener('blur', stopMoving);
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) stopMoving();
+    });
     
     // Populate Wi-Fi dropdown and bind scan button
     scanWifi();
@@ -327,5 +401,9 @@ window.onload = () => {
     }
 
     // Auto connect using the pre-filled hostname/IP
+    fetch('/api/status')
+        .then(response => response.json())
+        .then(data => { if (data.mode) activeRobotMode = data.mode; })
+        .catch(() => { activeRobotMode = 'unknown'; });
     connectROS();
 };

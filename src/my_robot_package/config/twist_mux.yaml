@@ -1,0 +1,20 @@
+twist_mux:
+  ros__parameters:
+    topics:
+      # Existing dashboard/keyboard teleop topic. Manual control wins while fresh.
+      teleop:
+        topic: /cmd_vel
+        timeout: 0.5
+        priority: 100
+      person_tracking:
+        topic: /cmd_vel/tracking
+        timeout: 0.5
+        priority: 60
+      navigation:
+        topic: /cmd_vel/navigation
+        timeout: 0.5
+        priority: 50
+      mapping:
+        topic: /cmd_vel/mapping
+        timeout: 0.5
+        priority: 40

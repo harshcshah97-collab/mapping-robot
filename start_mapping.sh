@@ -1,2 +1,9 @@
-cd /home/harsh/ros2_ws/src/my_robot_package
-ros2 launch my_robot_package bringup_and_map.launch.py
+#!/bin/bash
+set -euo pipefail
+
+ROBOT_WS="${ROBOT_WS:-/home/harsh/ros2_ws}"
+
+source /opt/ros/jazzy/setup.bash
+source "$ROBOT_WS/install/setup.bash"
+
+exec ros2 launch my_robot_package bringup_and_map.launch.py "$@"

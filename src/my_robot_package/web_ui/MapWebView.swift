@@ -3,6 +3,14 @@ import WebKit
 
 struct MapWebView: UIViewRepresentable {
     let ipAddress: String
+
+    final class Coordinator {
+        var loadedURL: URL?
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
     
     func makeUIView(context: Context) -> WKWebView {
         let webView = WKWebView()
@@ -14,10 +22,9 @@ struct MapWebView: UIViewRepresentable {
     }
     
     func updateUIView(_ webView: WKWebView, context: Context) {
-        // We point to your existing Flask server
-        if let url = URL(string: "http://\(ipAddress):8080") {
-            let request = URLRequest(url: url)
-            webView.load(request)
-        }
+        guard let url = URL(string: "http://\(ipAddress):8080"),
+              context.coordinator.loadedURL != url else { return }
+        context.coordinator.loadedURL = url
+        webView.load(URLRequest(url: url))
     }
 }

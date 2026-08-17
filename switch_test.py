@@ -1,34 +1,35 @@
-from gpiozero import Button
+#!/usr/bin/env python3
+"""Interactive diagnostic for the three physical bumper switches."""
+
 import time
 
-# Initialize the switches
-# pull_up=True turns on the Pi's internal resistor (expecting a Ground connection)
-# bounce_time=0.1 ignores the tiny mechanical vibrations of the metal lever
-left_switch = Button(9, pull_up=True, bounce_time=0.1)
-center_switch = Button(11, pull_up=True, bounce_time=0.1)
-right_switch = Button(10, pull_up=True, bounce_time=0.1)
+from gpiozero import Button
 
-# Define the callback functions
-def left_click():
-    print("🟢 LEFT switch (GPIO 9) clicked!")
 
-def center_click():
-    print("🟡 CENTER switch (GPIO 11) clicked!")
+def main():
+    switches = {
+        "LEFT": Button(9, pull_up=True, bounce_time=0.1),
+        "CENTER": Button(11, pull_up=True, bounce_time=0.1),
+        "RIGHT": Button(10, pull_up=True, bounce_time=0.1),
+    }
 
-def right_click():
-    print("🔵 RIGHT switch (GPIO 10) clicked!")
+    def reporter(name):
+        return lambda: print(f"{name} bumper pressed")
 
-# Attach the functions to the hardware events
-left_switch.when_pressed = left_click
-center_switch.when_pressed = center_click
-right_switch.when_pressed = right_click
+    for name, switch in switches.items():
+        switch.when_pressed = reporter(name)
 
-print("🤖 Bumper Switch Diagnostics Online.")
-print("Waiting for manual clicks... (Press Ctrl+C to exit)")
+    print("Bumper switch diagnostic online.")
+    print("Press each switch. Press Ctrl+C to exit.")
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        print("Diagnostic terminated.")
+    finally:
+        for switch in switches.values():
+            switch.close()
 
-# Keep the script alive
-try:
-    while True:
-        time.sleep(1)
-except KeyboardInterrupt:
-    print("\nDiagnostics terminated.")
+
+if __name__ == "__main__":
+    main()

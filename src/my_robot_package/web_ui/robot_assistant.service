@@ -1,0 +1,18 @@
+[Unit]
+Description=Bob Robot Voice Assistant
+After=network-online.target sound.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=harsh
+Environment="ROBOT_WS=/home/harsh/ros2_ws"
+EnvironmentFile=/home/harsh/.config/mapping-robot/assistant.env
+ExecStart=/home/harsh/ros2_ws/start_assistant.sh
+Restart=on-failure
+RestartSec=5
+KillSignal=SIGINT
+TimeoutStopSec=20
+
+[Install]
+WantedBy=multi-user.target

@@ -1,7 +1,8 @@
 [Unit]
 Description=Robot BLE Wi-Fi Setup Service
-After=network.target bluetooth.service bluetooth.target
+After=network.target bluetooth.service bluetooth.target robot_web.service
 Requires=bluetooth.service
+Wants=robot_web.service
 
 [Service]
 Type=simple
@@ -13,6 +14,7 @@ ExecStartPre=+/usr/sbin/rfkill unblock bluetooth
 ExecStart=/usr/bin/python3 -u /home/harsh/ros2_ws/src/my_robot_package/web_ui/ble_wifi_scanner.py
 Restart=on-failure
 RestartSec=5
+TimeoutStopSec=15
 
 [Install]
 WantedBy=multi-user.target
