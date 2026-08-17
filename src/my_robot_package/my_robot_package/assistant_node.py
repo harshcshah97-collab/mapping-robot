@@ -52,9 +52,16 @@ class AssistantNode(Node):
             "openai_model", os.environ.get("OPENAI_MODEL", "gpt-4o")
         )
         self.declare_parameter("allow_shell_commands", False)
+        self.declare_parameter(
+            "microphone_sample_rate",
+            int(os.environ.get("ROBOT_MIC_SAMPLE_RATE", "16000")),
+        )
         self.openai_model = str(self.get_parameter("openai_model").value)
         self.allow_shell_commands = bool(
             self.get_parameter("allow_shell_commands").value
+        )
+        self.microphone_sample_rate = int(
+            self.get_parameter("microphone_sample_rate").value
         )
         self.client = OpenAI(api_key=api_key)
         self.recognizer = sr.Recognizer()
@@ -220,20 +227,40 @@ class AssistantNode(Node):
             return "I'm having trouble analyzing the image right now."
 
     def listening_loop(self):
-        try:
-            # Wrap the microphone initialization and opening in the C-warning suppressor
-            with suppress_c_warnings():
-                # By passing None, PyAudio uses the system default (PulseAudio/Pipewire)
-                # which safely manages shared access to the hardware microphone.
-                mic = sr.Microphone(device_index=None)
-                source = mic.__enter__()
+        mic = None
+        source = None
+        while rclpy.ok():
+            try:
+                # PipeWire handles shared access when available. The 16 kHz
+                # fallback also works with the EMEET USB device's raw ALSA mode.
+                with suppress_c_warnings():
+                    mic = sr.Microphone(
+                        device_index=None,
+                        sample_rate=self.microphone_sample_rate,
+                    )
+                    source = mic.__enter__()
 
-            self.get_logger().info("Microphone connected via System Default (Pulse/Pipewire).")
+                if source.stream is None:
+                    raise OSError(
+                        "PyAudio returned no input stream for the default device."
+                    )
+                self.get_logger().info(
+                    "Microphone connected at %d Hz."
+                    % self.microphone_sample_rate
+                )
+                break
+            except Exception as error:
+                if getattr(mic, 'stream', None) is not None:
+                    mic.__exit__(None, None, None)
+                mic = None
+                source = None
+                self.get_logger().error(
+                    "Microphone init failed: %s. Retrying in 5 seconds."
+                    % error
+                )
+                time.sleep(5)
 
-            if source.stream is None:
-                raise OSError("PyAudio failed to open the default audio stream. The device might be busy, muted, or disconnected.")
-        except Exception as e:
-            self.get_logger().error(f"Microphone init failed! Error: {e}")
+        if source is None:
             return
 
         try:

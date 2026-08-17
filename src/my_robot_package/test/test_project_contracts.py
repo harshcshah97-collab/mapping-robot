@@ -148,3 +148,14 @@ def test_oakd_depth_is_calibration_gated():
     source = (PYTHON_PACKAGE / "person_follower_node.py").read_text()
     assert "self.oakd_extrinsics_calibrated" in source
     assert "self.oakd_depth_benchmark_passed" in source
+
+
+def test_assistant_service_has_resilient_audio_configuration():
+    service = (PACKAGE_ROOT / "web_ui" / "robot_assistant.service").read_text()
+    assert "XDG_RUNTIME_DIR=/run/user/%U" in service
+    assert "PULSE_SERVER=unix:/run/user/%U/pulse/native" in service
+    assert "EnvironmentFile=/home/harsh/.config/mapping-robot/assistant.env" in service
+
+    source = (PYTHON_PACKAGE / "assistant_node.py").read_text()
+    assert '"microphone_sample_rate"' in source
+    assert "Retrying in 5 seconds" in source
