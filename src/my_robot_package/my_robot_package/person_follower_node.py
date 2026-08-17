@@ -14,7 +14,7 @@ import numpy as np
 import rclpy
 from cv_bridge import CvBridge
 from geometry_msgs.msg import Twist
-from rclpy.exceptions import RCLError
+from rclpy._rclpy_pybind11 import RCLError
 from rclpy.node import Node
 from sensor_msgs.msg import Image, LaserScan, PointCloud2, Range
 from sensor_msgs_py import point_cloud2

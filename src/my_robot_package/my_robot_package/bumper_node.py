@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 import rclpy
-from rclpy.exceptions import RCLError
+from rclpy._rclpy_pybind11 import RCLError
 from rclpy.node import Node
 from sensor_msgs.msg import PointCloud2
 from sensor_msgs_py import point_cloud2
