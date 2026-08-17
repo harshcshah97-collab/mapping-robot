@@ -47,6 +47,9 @@ rosdep install --from-paths src --ignore-src -r -y
 source install/setup.bash
 ```
 
+`start_build.sh` applies the tracked, idempotent LiDAR pthread compatibility
+patch in `patches/` because the pinned upstream driver omits that include.
+
 The first OAK-D AI run needs internet access to download the selected Luxonis
 model. Later runs can use its local cache.
 

@@ -1,0 +1,12 @@
+diff --git a/ldlidar_driver/src/logger/log_module.cpp b/ldlidar_driver/src/logger/log_module.cpp
+index 61369e0..f43139d 100644
+--- a/ldlidar_driver/src/logger/log_module.cpp
++++ b/ldlidar_driver/src/logger/log_module.cpp
+@@ -16,6 +16,7 @@
+ * limitations under the License.
+ **/
+ #include "log_module.h"
++#include <pthread.h>
+ 
+ #include <time.h>
+ #include <string.h>

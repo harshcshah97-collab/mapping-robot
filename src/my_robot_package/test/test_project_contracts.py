@@ -159,3 +159,13 @@ def test_assistant_service_has_resilient_audio_configuration():
     source = (PYTHON_PACKAGE / "assistant_node.py").read_text()
     assert '"microphone_sample_rate"' in source
     assert "Retrying in 5 seconds" in source
+
+
+def test_build_applies_the_pinned_lidar_compatibility_patch():
+    build_script = (PACKAGE_ROOT.parents[1] / "start_build.sh").read_text()
+    patch_path = (
+        PACKAGE_ROOT.parents[1] / "patches" / "ldlidar-pthread.patch"
+    )
+    assert patch_path.is_file()
+    assert "ldlidar-pthread.patch" in build_script
+    assert "git -C \"$LIDAR_ROOT\" apply" in build_script
