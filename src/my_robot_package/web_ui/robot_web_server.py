@@ -106,7 +106,7 @@ def index():
 
 @app.route("/api/status", methods=["GET"])
 def robot_status():
-    global active_mode, ros_process
+    global active_mode
     with process_lock:
         if ros_process is None or ros_process.poll() is not None:
             active_mode = "stopped"
