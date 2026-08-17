@@ -137,6 +137,11 @@ def test_full_launches_route_motion_through_twist_mux():
     motor_source = (PYTHON_PACKAGE / "motor_driver_node.py").read_text()
     assert "command_topic" in motor_source
 
+    mux_config = yaml.safe_load(
+        (PACKAGE_ROOT / "config" / "twist_mux.yaml").read_text()
+    )
+    assert mux_config["twist_mux"]["ros__parameters"]["use_stamped"] is False
+
 
 def test_oakd_depth_is_calibration_gated():
     hardware = yaml.safe_load(

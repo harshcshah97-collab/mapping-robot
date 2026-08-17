@@ -1,5 +1,8 @@
 twist_mux:
   ros__parameters:
+    # All command producers and the motor driver use geometry_msgs/Twist.
+    # twist_mux 4.5 defaults to TwistStamped unless this is explicit.
+    use_stamped: false
     topics:
       # Existing dashboard/keyboard teleop topic. Manual control wins while fresh.
       teleop:

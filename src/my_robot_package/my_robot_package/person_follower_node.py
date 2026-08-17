@@ -14,6 +14,7 @@ import numpy as np
 import rclpy
 from cv_bridge import CvBridge
 from geometry_msgs.msg import Twist
+from rclpy.exceptions import RCLError
 from rclpy.node import Node
 from sensor_msgs.msg import Image, LaserScan, PointCloud2, Range
 from sensor_msgs_py import point_cloud2
@@ -673,8 +674,13 @@ class PersonFollowerNode(Node):
             self.get_logger().warning("Motion blocked: %s" % reason)
 
     def stop_robot(self):
-        if self.motion_enabled:
+        if not self.motion_enabled or not self.context.ok():
+            return
+        try:
             self.cmd_vel_publisher.publish(Twist())
+        except RCLError:
+            # ROS may invalidate the context before launch invokes node cleanup.
+            pass
 
     def save_photo(self):
         self.recording_directory.mkdir(parents=True, exist_ok=True)
@@ -743,7 +749,13 @@ class PersonFollowerNode(Node):
         self.recording_path = None
 
     def _publish_event(self, event):
-        self.event_publisher.publish(String(data=event))
+        if not self.context.ok():
+            return
+        try:
+            self.event_publisher.publish(String(data=event))
+        except RCLError:
+            # Event delivery is best-effort while the process is shutting down.
+            pass
 
     def _publish_status_periodically(self):
         now = time.monotonic()
@@ -771,18 +783,42 @@ class PersonFollowerNode(Node):
 
     def destroy_node(self):
         self.get_logger().info("Stopping person tracker and OAK-D pipeline.")
-        self.stop_robot()
-        self.stop_recording()
-        for queue_name in ("rgb_queue", "tracklets_queue", "pointcloud_queue"):
-            queue = getattr(self, queue_name, None)
-            if queue is not None and hasattr(queue, "close"):
-                queue.close()
-        if hasattr(self, "pipeline"):
-            if hasattr(self.pipeline, "stop"):
-                self.pipeline.stop()
-            if hasattr(self.pipeline, "wait"):
-                self.pipeline.wait()
-        super().destroy_node()
+        try:
+            try:
+                self.stop_robot()
+            except Exception as error:
+                self.get_logger().warning(
+                    "Could not publish the final stop command: %s" % error
+                )
+            try:
+                self.stop_recording()
+            except Exception as error:
+                self.get_logger().warning(
+                    "Could not close the video recording: %s" % error
+                )
+            for queue_name in (
+                "rgb_queue", "tracklets_queue", "pointcloud_queue"
+            ):
+                queue = getattr(self, queue_name, None)
+                if queue is not None and hasattr(queue, "close"):
+                    try:
+                        queue.close()
+                    except Exception as error:
+                        self.get_logger().warning(
+                            "Could not close %s: %s" % (queue_name, error)
+                        )
+            pipeline = getattr(self, "pipeline", None)
+            if pipeline is not None and hasattr(pipeline, "stop"):
+                try:
+                    pipeline.stop()
+                    if hasattr(pipeline, "wait"):
+                        pipeline.wait()
+                except Exception as error:  # Ensure ROS/GPIO cleanup still runs.
+                    self.get_logger().warning(
+                        "Could not stop OAK-D pipeline cleanly: %s" % error
+                    )
+        finally:
+            super().destroy_node()
 
 
 def main(args=None):

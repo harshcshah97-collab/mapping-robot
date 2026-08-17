@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import rclpy
+from rclpy.exceptions import RCLError
 from rclpy.node import Node
 from sensor_msgs.msg import PointCloud2
 from sensor_msgs_py import point_cloud2
@@ -71,10 +72,16 @@ class BumperNode(Node):
             self.cloud_pub.publish(cloud_msg)
 
     def destroy_node(self):
-        self.stop_pub.publish(Bool(data=True))
-        for bumper in (self.left_bumper, self.center_bumper, self.right_bumper):
-            bumper.close()
-        super().destroy_node()
+        try:
+            if self.context.ok():
+                try:
+                    self.stop_pub.publish(Bool(data=True))
+                except RCLError:
+                    pass
+            for bumper in (self.left_bumper, self.center_bumper, self.right_bumper):
+                bumper.close()
+        finally:
+            super().destroy_node()
 
 
 def main(args=None):
