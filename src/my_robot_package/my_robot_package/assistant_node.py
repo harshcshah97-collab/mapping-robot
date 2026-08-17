@@ -278,12 +278,7 @@ class AssistantNode(Node):
                     wake_words = ["hi bob", "hey bob", "high bob", "hello bob"]
                     if any(w in text for w in wake_words):
                         self.get_logger().info(f"Wake word detected! (Heard: '{text}')")
-                        subprocess.run(
-                            ["espeak-ng", "Yes?"],
-                            check=False,
-                            stdout=subprocess.DEVNULL,
-                            stderr=subprocess.DEVNULL,
-                        )
+                        self.acknowledge_wake_word()
 
                         # Enter an active conversation loop
                         conversation_active = True
@@ -449,13 +444,41 @@ class AssistantNode(Node):
                 response.stream_to_file(speech_file_path)
 
             # Play the generated audio file
-            subprocess.run(
-                ["mpg123", str(speech_file_path)],
+            playback = subprocess.run(
+                ["mpg123", "-q", "-o", "pulse", str(speech_file_path)],
                 check=False,
+                capture_output=True,
+                text=True,
             )
+            if playback.returncode != 0:
+                detail = playback.stderr.strip()[-300:]
+                raise RuntimeError(
+                    "Pulse playback failed with exit code %d: %s"
+                    % (playback.returncode, detail)
+                )
 
         except Exception as e:
             self.get_logger().error(f"AI/Network Error: {e}")
+
+    def acknowledge_wake_word(self):
+        """Play the short wake acknowledgement through PipeWire/Pulse."""
+        try:
+            speech = subprocess.run(
+                ["espeak-ng", "--stdout", "Yes?"],
+                check=True,
+                capture_output=True,
+            )
+            subprocess.run(
+                ["paplay"],
+                input=speech.stdout,
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
+            )
+        except (OSError, subprocess.CalledProcessError) as error:
+            self.get_logger().warning(
+                "Wake acknowledgement playback failed: %s" % error
+            )
 
 
 def main(args=None):

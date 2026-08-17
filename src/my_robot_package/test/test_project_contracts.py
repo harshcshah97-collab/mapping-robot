@@ -152,13 +152,17 @@ def test_oakd_depth_is_calibration_gated():
 
 def test_assistant_service_has_resilient_audio_configuration():
     service = (PACKAGE_ROOT / "web_ui" / "robot_assistant.service").read_text()
-    assert "XDG_RUNTIME_DIR=/run/user/%U" in service
-    assert "PULSE_SERVER=unix:/run/user/%U/pulse/native" in service
     assert "EnvironmentFile=/home/harsh/.config/mapping-robot/assistant.env" in service
 
     source = (PYTHON_PACKAGE / "assistant_node.py").read_text()
     assert '"microphone_sample_rate"' in source
     assert "Retrying in 5 seconds" in source
+    assert '["mpg123", "-q", "-o", "pulse"' in source
+    assert '["paplay"]' in source
+
+    starter = (PACKAGE_ROOT.parents[1] / "start_assistant.sh").read_text()
+    assert 'ROBOT_USER_ID="$(id -u)"' in starter
+    assert 'PULSE_SERVER="${PULSE_SERVER:-unix:$XDG_RUNTIME_DIR/pulse/native}"' in starter
 
 
 def test_build_applies_the_pinned_lidar_compatibility_patch():

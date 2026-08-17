@@ -7,8 +7,6 @@ Wants=network-online.target
 Type=simple
 User=harsh
 Environment="ROBOT_WS=/home/harsh/ros2_ws"
-Environment="XDG_RUNTIME_DIR=/run/user/%U"
-Environment="PULSE_SERVER=unix:/run/user/%U/pulse/native"
 EnvironmentFile=/home/harsh/.config/mapping-robot/assistant.env
 ExecStart=/home/harsh/ros2_ws/start_assistant.sh
 Restart=on-failure
