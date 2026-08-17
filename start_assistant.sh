@@ -1,11 +1,12 @@
 #!/bin/bash
-set -euo pipefail
+set -eo pipefail
 
 ROBOT_WS="${ROBOT_WS:-/home/harsh/ros2_ws}"
 
 # Source ROS 2 and the robot workspace.
 source /opt/ros/jazzy/setup.bash
 source "$ROBOT_WS/install/setup.bash"
+set -u
 
 # Keep the key in the service/user environment; never put it in this repository.
 export OPENAI_API_KEY="${OPENAI_API_KEY:?Set OPENAI_API_KEY before running}"
