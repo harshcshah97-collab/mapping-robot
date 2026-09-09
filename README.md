@@ -1,5 +1,11 @@
 # Mapping Robot
 
+> **Long-term archive:** Start with
+> [`docs/RECOMMISSIONING_MANUAL.md`](docs/RECOMMISSIONING_MANUAL.md). It links
+> the verified wiring, node/data-flow reference, file guide, access records,
+> safety gates, and complete recommissioning sequence. Actual passwords, API
+> keys, Wi-Fi credentials, and private keys are intentionally not stored in Git.
+
 ROS 2 Jazzy workspace for a Raspberry Pi companion robot with four mutually
 exclusive operating modes:
 
@@ -22,7 +28,7 @@ submodules:
 
 ```bash
 git clone --recurse-submodules \
-  --branch pi-snapshot-20260731 \
+  --branch recommissioning-archive-2026-09-09 \
   https://github.com/harshcshah97-collab/mapping-robot.git \
   /home/harsh/ros2_ws
 cd /home/harsh/ros2_ws
@@ -52,6 +58,16 @@ patch in `patches/` because the pinned upstream driver omits that include.
 
 The first OAK-D AI run needs internet access to download the selected Luxonis
 model. Later runs can use its local cache.
+
+Production person tracking intentionally uses a separate DepthAI 2 runtime so
+it cannot accidentally import the incompatible DepthAI 3 package from the
+normal Python environment:
+
+```bash
+python3 -m venv --system-site-packages /home/harsh/ros2_ws/.venv-depthai2
+PYTHONNOUSERSITE=1 /home/harsh/ros2_ws/.venv-depthai2/bin/python3 \
+  -m pip install "depthai==2.32.0.0"
+```
 
 ## Frame and topic contract
 
@@ -158,6 +174,11 @@ outdoors:
 ros2 launch my_robot_package person_tracking.launch.py
 ```
 
+The production launch now uses the isolated DepthAI 2.32 environment proven on
+the OAK-D Lite; it does not use the unstable DepthAI 3 spatial pipeline. It
+routes tracking commands through `twist_mux` and requires fresh LD19,
+ultrasonic, left/right IR, and bumper data before it can command motion.
+
 It starts idle: the camera detects people but the robot will not move until it
 receives a command. Available commands on `/tracking/command` are:
 
@@ -190,6 +211,20 @@ helps recover from a changed DepthAI track ID, but similar clothing or major
 lighting changes can still confuse it. Clear and re-enroll when clothing or
 lighting changes.
 
+Follow and keep-frame now fail closed when no enrollment exists. Enrollment
+also waits until exactly one valid-depth person is visible, and an enrolled
+person must have a readable, matching appearance signature even when the OAK-D
+tracker reuses an old track ID. For the strongest available session lock:
+
+1. Start Vision while Bob is stopped.
+2. Stand alone with your full body visible at roughly the intended distance.
+3. Enroll in the same clothes and lighting in which you will be followed.
+4. Confirm `subject_enrolled: true` and then start Follow.
+
+This materially reduces accidental target switching, but it cannot prove human
+identity. A future biometric face embedding or a deliberate visual/wearable
+tag is required if Bob must distinguish you from someone with a similar outfit.
+
 The recommended boot service runs Bob separately, so tracking defaults to
 `enable_assistant:=false`. For a one-off run without that service:
 
@@ -198,15 +233,25 @@ ros2 launch my_robot_package person_tracking.launch.py \
   enable_assistant:=true
 ```
 
-The controller stops if the target is lost, LiDAR becomes stale, an obstacle
-is too close, or a bumper is pressed.
+Apartment tuning uses a 0.60 m person-follow distance, 0.10 m/s maximum follow
+speed, a 0.30 m LiDAR stop distance, and a 0.20 m ultrasonic/IR stop distance.
+The current supervised profile temporarily requires both IR channels to agree
+because the left FC-51 remains asserted in open space; both channels still have
+to publish fresh data. This degraded mode can miss a corner obstacle detected
+by only one IR sensor and must be removed after repairing or calibrating it.
+The controller also stops if the target or any required sensor is lost/stale,
+if a bumper is pressed, or if the motor-command watchdog expires. These are
+software thresholds; the finished physical footprint and stopping distance
+still need measurement.
 
 ## Bob voice assistant at boot
 
 Bob remains a first-class node. It uses the original `gpt-4o` default for text
-and camera questions, the OpenAI speech API for replies, and publishes tracking
-commands on `/assistant/command`. General AI-generated shell execution is
-disabled by default.
+and camera questions and the OpenAI speech API for replies. Robot-control tool
+calls go through the local app server so voice commands obey the same exclusive
+mode ownership as app buttons. The legacy `/assistant/command` publisher remains
+for compatibility, and general AI-generated shell execution is disabled by
+default.
 
 Keep the API key outside Git. Create its systemd environment file:
 
@@ -229,7 +274,7 @@ export OPENAI_API_KEY="your-key-from-a-secret-store"
 ./start_assistant.sh
 ```
 
-## Dashboard and BLE startup
+## Bob companion app
 
 The web server manages only the ROS process groups it created. It no longer
 uses broad `pkill -9` commands that can kill unrelated or manually launched
@@ -247,7 +292,54 @@ Open `http://ROBOT_IP:8080`. The browser dependencies are currently loaded
 from pinned CDN versions, so a completely offline deployment should vendor
 those assets locally.
 
-Security warning: the dashboard, BLE characteristics, and rosbridge endpoint
+The phone-friendly app packages the robot controls behind one mode manager:
+
+- **Vision** starts the OAK-D tracker in motionless idle, enrolls the intended
+  subject, follows, keeps the subject framed, and captures photos or video.
+- **Map** starts SLAM/wall following and saves a completed map.
+- **Navigate** loads a selected saved map, sets the initial pose, sends an
+  arbitrary map goal, or drives to a named room.
+- **Drive** starts a minimal manual stack with `twist_mux`, the motor watchdog,
+  encoder odometry, and the physical bumper. Buttons publish only while held
+  and send zero velocity when released or when the app is hidden.
+- **Bob** accepts typed questions over ROS as well as the existing “Hi Bob”
+  microphone flow. Both use the same intelligence, navigation, tracking, web
+  search, and camera-scene tools.
+- The red **STOP ROBOT** control is visible on every app screen and terminates
+  the managed mode. The physical motor-power cutoff remains the only stop that
+  is independent of the Pi and ROS.
+
+### Teach Bob room names
+
+1. Build and save a map, then select that exact map in the app.
+2. Start Navigation and set the robot's initial pose.
+3. Tap **Draw room**, then tap at least three corners around a free-space area.
+4. Enter a name such as `Kitchen`, choose an arrival direction, and save it.
+5. Use the room's **Go** button or say, “Hi Bob … come to the kitchen.”
+
+Rooms are stored locally in
+`~/.config/mapping-robot/rooms.json`. Each record is tied to its map YAML and
+contains a polygon plus a Nav2 goal inside that polygon. If a map is rebuilt or
+its origin changes, redraw its rooms before trusting named navigation.
+
+The app includes a web-app manifest and can be added to a phone's home screen.
+Full offline use still requires vendoring ROSLib/ROS2D dependencies, and some
+mobile browsers require HTTPS before enabling service-worker installation.
+The current HTTP API and rosbridge endpoint have no authentication, so use the
+app only on a trusted private LAN.
+
+### Voice and scene intelligence
+
+Examples include “follow me,” “keep me framed,” “start mapping,” “start
+navigation,” “switch to manual control,” “come to the kitchen,” “take a
+photo,” and “what do you see in front of you?” Mode-changing voice requests go
+through the app manager, so Bob stops the previous process group before
+starting the next one. Scene answers use the most recent
+`/oakd/color/image_raw` frame; if Vision/OAK-D perception is not running, Bob
+reports that no fresh camera image is available instead of describing stale
+imagery.
+
+Security warning: the app, BLE characteristics, and rosbridge endpoint
 do not yet authenticate clients. Run them only on a trusted private robot
 network or behind a firewall/VPN. Any device that can reach these ports may be
 able to command motion or power actions.

@@ -18,9 +18,8 @@ import cv2
 import base64
 import subprocess
 import time
-
-from my_robot_package.assistant_logic import command_for_robot_mode
-
+import urllib.error
+import urllib.request
 
 @contextmanager
 def suppress_c_warnings():
@@ -66,6 +65,7 @@ class AssistantNode(Node):
         self.client = OpenAI(api_key=api_key)
         self.recognizer = sr.Recognizer()
         self.cv_bridge = CvBridge()
+        self.request_lock = threading.Lock()
 
         # --- PERFORMANCE TUNING ---
         # Lower threshold makes the mic more sensitive to catch the wake word
@@ -134,11 +134,33 @@ class AssistantNode(Node):
                                     "follow", "keep_frame", "take_photo",
                                     "start_recording", "stop_recording",
                                     "enroll_target", "clear_enrollment",
-                                    "orbit", "stop"
+                                    "orbit", "stop", "start_mapping",
+                                    "start_navigation",
+                                    "start_teleop"
                                 ]
                             }
                         },
                         "required": ["mode"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "navigate_to_room",
+                    "description": (
+                        "Start navigation and drive to a room previously named "
+                        "by the user in the Bob app."
+                    ),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "room": {
+                                "type": "string",
+                                "description": "Room name, such as kitchen."
+                            }
+                        },
+                        "required": ["room"]
                     }
                 }
             },
@@ -168,6 +190,17 @@ class AssistantNode(Node):
             StringMsg,
             '/assistant/command',
             10)
+        self.response_publisher = self.create_publisher(
+            StringMsg,
+            '/assistant/text_response',
+            10,
+        )
+        self.create_subscription(
+            StringMsg,
+            '/assistant/text_query',
+            self.text_query_callback,
+            10,
+        )
 
         # Start the listening loop in a background thread
         self.listen_thread = threading.Thread(target=self.listening_loop)
@@ -179,7 +212,9 @@ class AssistantNode(Node):
             "You are Bob, a helpful companion robot voice assistant. Use "
             "`analyze_visual_scene` for questions about the camera view, `search_web` "
             "for current information, and `set_robot_mode` for following, framing, "
-            "photos, recording, and enrolling or clearing the tracked subject. "
+            "photos, recording, mapping, navigation, manual control, and "
+            "enrolling or clearing the tracked subject. Use `navigate_to_room` "
+            "for requests such as 'come to the kitchen'. "
             "Explain that orbit mode is not yet available if "
             "the user requests it. Keep spoken answers brief and in plain English."
         )
@@ -188,6 +223,53 @@ class AssistantNode(Node):
         if now:
             prompt += " The current local date and time is %s." % now
         return prompt
+
+    def _post_robot_app(self, endpoint, payload=None):
+        """Call one allowlisted local robot-app endpoint."""
+        body = json.dumps(payload or {}).encode("utf-8")
+        request_object = urllib.request.Request(
+            "http://127.0.0.1:8080%s" % endpoint,
+            data=body,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request_object, timeout=15.0) as response:
+                result = json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as error:
+            try:
+                detail = json.loads(error.read().decode("utf-8")).get(
+                    "message", str(error)
+                )
+            except (OSError, json.JSONDecodeError):
+                detail = str(error)
+            return "Robot app request failed: %s" % detail
+        except (OSError, urllib.error.URLError, json.JSONDecodeError) as error:
+            return "Robot app request failed: %s" % error
+        return str(result.get("message", "Robot app command accepted."))
+
+    def text_query_callback(self, message):
+        """Accept a text question from the app without blocking ROS callbacks."""
+        try:
+            payload = json.loads(message.data)
+            request_id = str(payload.get("id", ""))
+            text = str(payload.get("text", "")).strip()
+        except (json.JSONDecodeError, AttributeError):
+            request_id = ""
+            text = message.data.strip()
+        if not text:
+            return
+        threading.Thread(
+            target=self._answer_text_query,
+            args=(request_id, text),
+            daemon=True,
+        ).start()
+
+    def _answer_text_query(self, request_id, text):
+        reply = self.process_and_respond(text, speak=False)
+        self.response_publisher.publish(
+            StringMsg(data=json.dumps({"id": request_id, "text": reply}))
+        )
 
     # --- VISION: Callback to store the latest camera frame ---
     def image_callback(self, msg):
@@ -310,7 +392,12 @@ class AssistantNode(Node):
             if getattr(source, 'stream', None) is not None:
                 mic.__exit__(None, None, None)
 
-    def process_and_respond(self, text):
+    def process_and_respond(self, text, speak=True):
+        """Serialize AI requests from the microphone and companion app."""
+        with self.request_lock:
+            return self._process_and_respond(text, speak=speak)
+
+    def _process_and_respond(self, text, speak=True):
         try:
             # Update the system prompt with the current exact date and time
             now = datetime.now().strftime("%A, %B %d, %Y %I:%M %p")
@@ -392,10 +479,46 @@ class AssistantNode(Node):
                     elif tool_call.function.name == "set_robot_mode":
                         mode = args.get('mode', 'stop')
                         self.get_logger().info(f"[Setting Robot Mode: {mode}]")
-                        command_str = command_for_robot_mode(mode)
-                        self.command_publisher.publish(StringMsg(data=command_str))
-                        tool_output = f"Command '{mode}' sent to the robot's motion controller."
+                        endpoint_for_mode = {
+                            "follow": "/api/start_follow",
+                            "start_mapping": "/api/start_mapping",
+                            "start_navigation": "/api/start_navigation",
+                            "start_teleop": "/api/start_teleop",
+                            "stop": "/api/stop",
+                        }
+                        if mode in endpoint_for_mode:
+                            tool_output = self._post_robot_app(
+                                endpoint_for_mode[mode]
+                            )
+                        elif mode in {
+                            "keep_frame",
+                            "take_photo",
+                            "start_recording",
+                            "stop_recording",
+                            "enroll_target",
+                            "clear_enrollment",
+                        }:
+                            tool_output = self._post_robot_app(
+                                "/api/tracking_command",
+                                {
+                                    "command": mode,
+                                    "start_if_needed": True,
+                                },
+                            )
+                        else:
+                            tool_output = "Orbit mode is not available yet."
                         self.chat_history.append({"role": "tool", "tool_call_id": tool_call.id, "content": tool_output})
+
+                    elif tool_call.function.name == "navigate_to_room":
+                        room = str(args.get("room", "")).strip()
+                        tool_output = self._post_robot_app(
+                            "/api/navigate_room", {"room": room}
+                        )
+                        self.chat_history.append({
+                            "role": "tool",
+                            "tool_call_id": tool_call.id,
+                            "content": tool_output,
+                        })
 
                     elif tool_call.function.name == "analyze_visual_scene":
                         question = args.get('question', 'What do you see?')
@@ -426,10 +549,13 @@ class AssistantNode(Node):
             self.chat_history.append({"role": "assistant", "content": reply})
 
             # --- UPGRADE: Use OpenAI's high-quality TTS for a natural voice ---
-            self.speak(reply)
+            if speak:
+                self.speak(reply)
+            return reply
 
         except Exception as e:
             self.get_logger().error(f"AI/Network Error: {e}")
+            return "I'm having trouble completing that request right now."
 
     def speak(self, text):
         try:
