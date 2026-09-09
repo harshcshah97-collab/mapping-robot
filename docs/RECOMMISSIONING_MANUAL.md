@@ -1,5 +1,10 @@
 # Bob Robot Recommissioning Manual
 
+[Start here](START_HERE.md) |
+[Wiring](WIRING_AND_POWER.md) |
+[Nodes and data flow](NODES_AND_DATA_FLOW.md) |
+[File guide](FILE_GUIDE.md)
+
 Archive date: 2026-09-09
 
 Robot: Bob, Raspberry Pi 5 ROS 2 companion/mapping robot
@@ -15,6 +20,8 @@ power. Follow the linked wiring and node references where a step calls for them.
 
 ## Documentation set
 
+- [Start here](START_HERE.md): beginner GitHub navigation, repository map, and
+  task-based index for finding every document and code folder.
 - [Wiring and power](WIRING_AND_POWER.md): exact GPIO map, USB connections,
   signal circuit, provisional power topology, connector labels, first power.
 - [Nodes and data flow](NODES_AND_DATA_FLOW.md): every project node, external

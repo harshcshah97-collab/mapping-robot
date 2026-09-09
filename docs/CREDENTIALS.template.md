@@ -1,5 +1,10 @@
 # Robot Credential Record Template
 
+[Start here](START_HERE.md) |
+[Recommissioning manual](RECOMMISSIONING_MANUAL.md) |
+[Wiring](WIRING_AND_POWER.md) |
+[File guide](FILE_GUIDE.md)
+
 This is a template only. Never enter real passwords, API keys, Wi-Fi passwords,
 recovery codes, or private SSH keys in the Git-tracked copy of this file.
 

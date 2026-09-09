@@ -1,10 +1,20 @@
 # Mapping Robot
 
-> **Long-term archive:** Start with
-> [`docs/RECOMMISSIONING_MANUAL.md`](docs/RECOMMISSIONING_MANUAL.md). It links
-> the verified wiring, node/data-flow reference, file guide, access records,
-> safety gates, and complete recommissioning sequence. Actual passwords, API
-> keys, Wi-Fi credentials, and private keys are intentionally not stored in Git.
+> **New to this repository?** Open
+> [`docs/START_HERE.md`](docs/START_HERE.md) first. It explains branches, tags,
+> READMEs, GitHub navigation, every important folder, and where to find each
+> part of Bob's code.
+
+| Documentation | Use it for |
+| --- | --- |
+| [Start here](docs/START_HERE.md) | GitHub basics and finding files |
+| [Recommissioning manual](docs/RECOMMISSIONING_MANUAL.md) | complete start-to-finish recovery |
+| [Wiring and power](docs/WIRING_AND_POWER.md) | GPIO, circuit diagrams, power checks |
+| [Nodes and data flow](docs/NODES_AND_DATA_FLOW.md) | ROS topics, modes, assistant, UI, BLE |
+| [File guide](docs/FILE_GUIDE.md) | purpose of every project-owned file |
+
+Actual passwords, API keys, Wi-Fi credentials, private keys, and CAD are
+intentionally not stored in GitHub.
 
 ROS 2 Jazzy workspace for a Raspberry Pi companion robot with four mutually
 exclusive operating modes:

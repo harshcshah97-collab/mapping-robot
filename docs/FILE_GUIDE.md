@@ -1,5 +1,10 @@
 # Repository and File Guide
 
+[Start here](START_HERE.md) |
+[Recommissioning manual](RECOMMISSIONING_MANUAL.md) |
+[Wiring](WIRING_AND_POWER.md) |
+[Nodes and data flow](NODES_AND_DATA_FLOW.md)
+
 This repository is a complete ROS 2 colcon workspace snapshot. The expected Pi
 path is `/home/harsh/ros2_ws`. Source is under `src/`; `build/`, `install/`, and
 `log/` are generated locally and intentionally excluded from Git.

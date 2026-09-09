@@ -1,5 +1,10 @@
 # Bob Wiring and Power Reference
 
+[Start here](START_HERE.md) |
+[Recommissioning manual](RECOMMISSIONING_MANUAL.md) |
+[Nodes and data flow](NODES_AND_DATA_FLOW.md) |
+[File guide](FILE_GUIDE.md)
+
 Status: archived from source on 2026-09-09. GPIO assignments and software
 interfaces below are exact defaults from the repository. The power distribution
 is a recommended verification topology because the as-built terminal order,

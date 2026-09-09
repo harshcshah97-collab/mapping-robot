@@ -1,5 +1,10 @@
 # DepthAI 2.32 bounded floor-follow test
 
+[Start here](docs/START_HERE.md) |
+[Recommissioning manual](docs/RECOMMISSIONING_MANUAL.md) |
+[Wiring](docs/WIRING_AND_POWER.md) |
+[Nodes and data flow](docs/NODES_AND_DATA_FLOW.md)
+
 This is a one-off diagnostic mode for the OAK-D Lite regression in DepthAI 3.
 It does **not** replace the normal tracking stack and it does not downgrade the
 normal Python environment.
