@@ -1,0 +1,10 @@
+# This file records physical facts that software cannot determine on a laptop.
+# Change a flag only after completing the corresponding README checklist.
+wheel_geometry_measured: false
+wheel_speed_measured: false
+closed_loop_tuned_wheels_raised: false
+closed_loop_tuned_on_floor: false
+robot_footprint_measured: false
+oakd_mount_transform_measured: false
+oakd_depth_benchmark_passed: false
+imu_mount_and_bias_checked: false

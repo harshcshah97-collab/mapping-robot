@@ -33,7 +33,6 @@ struct ControlView: View {
             HStack {
                 Image(systemName: bleManager.isConnected ? "bluetooth.connected" : "bluetooth")
                     .foregroundColor(bleManager.isConnected ? .blue : .gray)
-                Text(bleManager.isConnected ? "Robot Connected" : "Searching...")
                 Text(bleManager.isConnected ? "Robot Connected" : "Not Connected")
                     .fontWeight(.bold)
                 
@@ -169,8 +168,23 @@ struct SettingsView: View {
                 }
                 
                 Section(header: Text("Node Management")) {
-                    Button("Start ROS Nodes") {
-                        bleManager.sendNodeCommand(command: "START_NODES")
+                    Button("Start Teleop") {
+                        bleManager.sendNodeCommand(command: "START_TELEOP")
+                    }
+                    .disabled(!bleManager.isConnected)
+
+                    Button("Start Mapping") {
+                        bleManager.sendNodeCommand(command: "START_MAPPING")
+                    }
+                    .disabled(!bleManager.isConnected)
+
+                    Button("Start Navigation") {
+                        bleManager.sendNodeCommand(command: "START_NAVIGATION")
+                    }
+                    .disabled(!bleManager.isConnected)
+
+                    Button("Start Person Tracking") {
+                        bleManager.sendNodeCommand(command: "START_TRACKING")
                     }
                     .disabled(!bleManager.isConnected)
                     

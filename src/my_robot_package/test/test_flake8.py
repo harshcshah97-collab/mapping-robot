@@ -19,7 +19,9 @@ import pytest
 @pytest.mark.flake8
 @pytest.mark.linter
 def test_flake8():
-    rc, errors = main_with_errors(argv=[])
+    # Use the repository policy instead of ament's bundled configuration so
+    # optional system-wide flake8 plugins cannot change the result.
+    rc, errors = main_with_errors(argv=['--config', 'setup.cfg'])
     assert rc == 0, \
         'Found %d code style errors / warnings:\n' % len(errors) + \
         '\n'.join(errors)

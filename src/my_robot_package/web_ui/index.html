@@ -1,130 +1,121 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Robot Control UI</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        body { background-color: #1e1e1e; color: #fff; }
-        .nav-tabs .nav-link { color: #aaa; }
-        .nav-tabs .nav-link.active { background-color: #333; color: #fff; border-color: #444; }
-        #map-container { display: flex; justify-content: center; margin-top: 15px; background: #2c2c2c; padding: 10px; border-radius: 8px;}
-        .control-btn.active { box-shadow: 0 0 10px 3px #0d6efd; }
-        .dpad-btn { width: 80px; height: 80px; font-size: 30px; display: flex; align-items: center; justify-content: center; user-select: none; touch-action: manipulation;}
-    </style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#101b24">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Bob Companion</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="bob-icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="bob-icon.svg">
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <!-- Sensor Check Modal / Overlay -->
-    <div id="sensor-check-overlay" class="d-none position-fixed top-0 start-0 w-100 h-100 bg-dark bg-opacity-75 z-3 align-items-center justify-content-center" style="z-index: 1050;">
-        <div class="card bg-dark text-light border-secondary p-4 w-75" style="max-width: 400px;">
-            <h4 class="text-center mb-4">🔍 Sensor Diagnostic</h4>
-            <ul class="list-group list-group-flush fs-5">
-                <li class="list-group-item bg-dark text-light border-secondary d-flex justify-content-between">
-                    IMU (I2C 0x68) <span id="check-imu">⏳</span>
-                </li>
-                <li class="list-group-item bg-dark text-light border-secondary d-flex justify-content-between">
-                    Ultrasonic <span id="check-ultra">⏳</span>
-                </li>
-                <li class="list-group-item bg-dark text-light border-secondary d-flex justify-content-between">
-                    IR Left <span id="check-ir-left">⏳</span>
-                </li>
-                <li class="list-group-item bg-dark text-light border-secondary d-flex justify-content-between">
-                    IR Right <span id="check-ir-right">⏳</span>
-                </li>
-            </ul>
+  <header class="app-header">
+    <div class="brand"><div class="brand-mark" aria-hidden="true">B</div><div><strong>Bob</strong><span>companion robot</span></div></div>
+    <div class="status-row"><span id="connection-pill" class="pill neutral">ROS offline</span><span id="mode-pill" class="pill">stopped</span><span id="temp-pill" class="pill">-- °C</span></div>
+  </header>
+
+  <main>
+    <section id="panel-home" class="panel active" aria-label="Home">
+      <div class="hero card">
+        <p class="eyebrow">ROBOT CONTROL</p><h1>What should Bob do?</h1>
+        <p>One operating mode runs at a time. Switching modes safely stops the old controller first.</p>
+        <div class="mode-grid">
+          <button class="mode-card tracking" data-action="start_tracking"><span class="mode-icon">◎</span><strong>Vision</strong><small>Enroll, follow, frame, capture</small></button>
+          <button class="mode-card navigation" data-open-panel="map"><span class="mode-icon">⌖</span><strong>Navigate</strong><small>Map goals and named rooms</small></button>
+          <button class="mode-card mapping" data-action="start_mapping"><span class="mode-icon">◇</span><strong>Map</strong><small>Explore and save a new map</small></button>
+          <button class="mode-card teleop" data-action="start_teleop"><span class="mode-icon">✣</span><strong>Drive</strong><small>Manual hold-to-move control</small></button>
         </div>
-    </div>
+      </div>
+      <div class="two-column">
+        <article class="card">
+          <div class="card-heading"><div><p class="eyebrow">IDENTITY LOCK</p><h2>Follow only you</h2></div><span id="identity-dot" class="status-dot"></span></div>
+          <p id="identity-summary">Start Vision, stand alone in view, then enroll. Bob will refuse motion until a profile exists.</p>
+          <div class="button-row"><button class="primary" data-tracking="enroll_target" data-start-if-needed="true">Enroll me</button><button data-tracking="clear_enrollment" data-start-if-needed="true">Forget profile</button></div>
+          <p class="fine-print">The current profile matches clothing colour and appearance. It is safer than nearest-person tracking, but it is not biometric proof.</p>
+        </article>
+        <article class="card">
+          <p class="eyebrow">BOB ASSISTANT</p><h2>Ask or command</h2>
+          <div id="chat-log" class="chat-log" aria-live="polite"><div class="message bob">Try “Come to the kitchen”, “Follow me”, or “What do you see?”</div></div>
+          <form id="assistant-form" class="ask-row"><input id="assistant-query" autocomplete="off" maxlength="500" placeholder="Ask Bob…" aria-label="Ask Bob"><button class="primary" type="submit">Send</button></form>
+          <p class="fine-print">Voice stays available through “Hi Bob”. Scene questions require the OAK-D camera feed to be running.</p>
+        </article>
+      </div>
+    </section>
 
-    <div class="container mt-4">
-        <h2 class="text-center mb-4">🤖 Robot Control Dashboard</h2>
-        
-        <div class="input-group mb-3">
-            <span class="input-group-text bg-dark text-white border-secondary">Robot IP</span>
-            <input type="text" id="robot-ip" class="form-control bg-dark text-white border-secondary" placeholder="e.g., 192.168.1.100">
-            <button class="btn btn-success" type="button" onclick="connectROS()">Connect</button>
+    <section id="panel-map" class="panel" aria-label="Map and navigation">
+      <div class="section-title"><div><p class="eyebrow">MAP & NAVIGATION</p><h1>Places Bob understands</h1></div></div>
+      <div class="map-toolbar card">
+        <label>Saved map<select id="map-select"><option value="">Loading maps…</option></select></label>
+        <div class="button-row"><button id="start-navigation" class="primary">Start navigation</button><button id="start-mapping">Start mapping</button><button id="set-pose">Set initial pose</button><button id="set-goal">Send goal</button></div>
+      </div>
+      <div class="map-layout">
+        <div class="card map-card">
+          <div id="map-shell"><div id="map"></div><div id="map-empty">Start Mapping or Navigation to load the live map.</div></div>
+          <p id="map-hint" class="map-hint">Drag on the map to set the robot pose or a navigation goal.</p>
         </div>
+        <aside class="card room-card">
+          <p class="eyebrow">SEMANTIC ROOMS</p><h2>Name areas</h2>
+          <p>Choose Draw room, tap at least three corners on the map, then save it. The center becomes Bob’s safe destination.</p>
+          <label>Room name<input id="room-name" maxlength="40" placeholder="Kitchen"></label>
+          <label>Arrival direction<select id="room-yaw"><option value="0">Face east (0°)</option><option value="1.5708">Face north (90°)</option><option value="3.1416">Face west (180°)</option><option value="-1.5708">Face south (-90°)</option></select></label>
+          <div class="button-row"><button id="draw-room" class="primary">Draw room</button><button id="save-room" disabled>Save room</button><button id="clear-room">Clear</button></div>
+          <div id="room-list" class="room-list"><p class="muted">No rooms loaded.</p></div>
+        </aside>
+      </div>
+      <div class="card save-map-card">
+        <div><p class="eyebrow">MAPPING MODE</p><h2>Save the finished map</h2><p>Use a short filename without spaces. Define rooms after the saved map is loaded in Navigation.</p></div>
+        <div class="ask-row"><input id="map-name" maxlength="48" placeholder="my_apartment"><button id="save-map" class="primary">Save map</button></div>
+      </div>
+    </section>
 
-        <div id="status" class="alert alert-secondary text-center">Disconnected</div>
+    <section id="panel-vision" class="panel" aria-label="Follow and camera">
+      <div class="section-title"><div><p class="eyebrow">OAK-D VISION</p><h1>Follow and capture</h1></div></div>
+      <div class="two-column">
+        <article class="card">
+          <h2>Safe setup</h2><ol class="steps"><li>Start Vision. Bob stays still.</li><li>Stand alone, full body visible, then tap Enroll me.</li><li>Confirm “Enrolled” below, then start Follow.</li></ol>
+          <label class="danger-check"><input type="checkbox" id="hot-override"> Supervised high-temperature override</label>
+          <p class="fine-print warning">Keep this off for normal use. It bypasses the normal thermal stop but not the absolute 95 °C limit.</p>
+          <div class="button-grid"><button data-action="start_tracking">Start Vision</button><button class="primary" data-tracking="enroll_target" data-start-if-needed="true">Enroll me</button><button class="success" data-action="start_follow">Follow me</button><button data-tracking="keep_frame" data-start-if-needed="true">Keep me framed</button><button class="danger" data-tracking="stop">Stop tracking motion</button><button data-tracking="clear_enrollment" data-start-if-needed="true">Forget profile</button></div>
+        </article>
+        <article class="card">
+          <p class="eyebrow">LIVE TRACKER</p>
+          <div class="metric-grid"><div><span>Mode</span><strong id="track-mode">offline</strong></div><div><span>Identity</span><strong id="track-enrolled">not enrolled</strong></div><div><span>Target</span><strong id="track-target">not visible</strong></div><div><span>Distance</span><strong id="track-distance">--</strong></div><div><span>Motion gate</span><strong id="track-block">--</strong></div><div><span>Camera</span><strong id="track-camera">--</strong></div></div>
+          <p id="tracking-event" class="event-line">Waiting for tracker…</p>
+          <div class="button-row"><button data-tracking="take_photo" data-start-if-needed="true">Take photo</button><button data-tracking="start_recording" data-start-if-needed="true">Start recording</button><button data-tracking="stop_recording">Stop recording</button></div>
+        </article>
+      </div>
+    </section>
 
-        <ul class="nav nav-tabs" id="myTab" role="tablist">
-            <li class="nav-item"><button class="nav-link active" id="map-tab" data-bs-toggle="tab" data-bs-target="#map-view">Map & Nav</button></li>
-            <li class="nav-item"><button class="nav-link" id="teleop-tab" data-bs-toggle="tab" data-bs-target="#teleop-view">Teleop</button></li>
-            <li class="nav-item"><button class="nav-link" id="system-tab" data-bs-toggle="tab" data-bs-target="#system-view">System & WiFi</button></li>
-        </ul>
+    <section id="panel-drive" class="panel" aria-label="Manual drive">
+      <div class="section-title"><div><p class="eyebrow">MANUAL CONTROL</p><h1>Hold to drive</h1></div><button id="enable-teleop">Start Teleop</button></div>
+      <div class="drive-layout">
+        <div class="card dpad-card"><button id="drive-forward" class="dpad up" aria-label="Forward">↑</button><button id="drive-left" class="dpad left" aria-label="Turn left">↶</button><button id="drive-stop" class="dpad stop" aria-label="Stop">■</button><button id="drive-right" class="dpad right" aria-label="Turn right">↷</button><button id="drive-back" class="dpad down" aria-label="Reverse">↓</button></div>
+        <div class="card"><h2>Drive limits</h2><label>Forward speed <output id="linear-output">0.12 m/s</output><input id="linear-speed" type="range" min="0.04" max="0.20" step="0.01" value="0.12"></label><label>Turn speed <output id="angular-output">0.60 rad/s</output><input id="angular-speed" type="range" min="0.15" max="1.00" step="0.05" value="0.60"></label><p class="fine-print warning">Commands are sent only while a button is held. Releasing, hiding, or leaving the page publishes zero velocity.</p></div>
+      </div>
+    </section>
 
-        <div class="tab-content mt-3">
-            <!-- Map & Navigation Tab -->
-            <div class="tab-pane fade show active" id="map-view">
-                <div class="d-flex justify-content-center gap-3 mb-3">
-                    <button class="btn btn-primary" onclick="triggerAction('start_mapping')">Start Mapping</button>
-                    <button class="btn btn-success" onclick="triggerAction('start_navigation')">Start Navigation</button>
-                    <button class="btn btn-danger" onclick="triggerAction('stop')">Stop All</button>
-                    <button class="btn btn-info text-white" onclick="triggerAction('start_teleop')">Start Teleop</button>
-                </div>
-                <div class="d-flex justify-content-center gap-3">
-                    <button id="btn-pose" class="btn btn-outline-warning control-btn" onclick="setInteractionMode('pose')">📍 Set Initial Pose</button>
-                    <button id="btn-goal" class="btn btn-outline-info control-btn" onclick="setInteractionMode('goal')">🚩 Set Nav Goal</button>
-                </div>
-                <div id="goal-status" class="alert alert-info text-center mt-3 d-none">Waiting for goal...</div>
-                <p class="text-center text-muted mt-2"><small>Click and drag on the map to set position and direction.</small></p>
-                <div id="map-container">
-                    <div id="map"></div>
-                </div>
-            </div>
+    <section id="panel-system" class="panel" aria-label="System">
+      <div class="section-title"><div><p class="eyebrow">SYSTEM</p><h1>Connections and power</h1></div></div>
+      <div class="two-column">
+        <article class="card"><h2>Robot connection</h2><label>Robot address<input id="robot-host" autocomplete="off"></label><div class="button-row"><button id="connect-ros" class="primary">Connect ROS</button><button id="check-imu">Check IMU</button></div><pre id="system-status">Waiting for status…</pre></article>
+        <article class="card"><h2>Wi-Fi</h2><label>Network<select id="wifi-ssid"><option value="">Scan for networks…</option></select></label><label>Password<input id="wifi-password" type="password" autocomplete="new-password"></label><div class="button-row"><button id="wifi-scan">Scan</button><button id="wifi-connect" class="primary">Connect</button></div><p id="wifi-status" class="fine-print"></p></article>
+        <article class="card danger-zone"><h2>Power</h2><p>These actions stop the active robot mode first.</p><div class="button-row"><button data-power="sleep">Sleep</button><button data-power="reboot">Reboot</button><button class="danger" data-power="shutdown">Shut down</button></div></article>
+      </div>
+    </section>
+  </main>
 
-            <!-- Teleop Tab -->
-            <div class="tab-pane fade" id="teleop-view">
-                <h4 class="text-center">Remote Drive</h4>
-                <div class="d-flex flex-column align-items-center mt-4">
-                    <button class="btn btn-secondary dpad-btn mb-2" id="btn-up">⬆️</button>
-                    <div class="d-flex justify-content-center gap-2 mb-2">
-                        <button class="btn btn-secondary dpad-btn" id="btn-left">⬅️</button>
-                        <button class="btn btn-danger dpad-btn" id="btn-stop">⏹️</button>
-                        <button class="btn btn-secondary dpad-btn" id="btn-right">➡️</button>
-                    </div>
-                    <button class="btn btn-secondary dpad-btn" id="btn-down">⬇️</button>
-                </div>
-            </div>
+  <button id="emergency-stop" class="emergency-stop">STOP ROBOT</button>
+  <nav class="bottom-nav" aria-label="Main navigation"><button class="active" data-panel="home"><span>●</span>Home</button><button data-panel="map"><span>⌖</span>Map</button><button data-panel="vision"><span>◎</span>Vision</button><button data-panel="drive"><span>✣</span>Drive</button><button data-panel="system"><span>⚙</span>System</button></nav>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-            <!-- System Tab -->
-            <div class="tab-pane fade" id="system-view">
-                <div class="card bg-dark text-light p-4 mt-3 border-secondary">
-                    <h4 class="mb-3">Connect to New WiFi</h4>
-                    <div class="input-group mb-2">
-                        <select id="ssid" class="form-select bg-dark text-white border-secondary">
-                            <option value="">Loading networks...</option>
-                        </select>
-                        <button class="btn btn-outline-info text-white" type="button" id="scanWifiBtn">Scan</button>
-                    </div>
-                    <input type="password" id="password" class="form-control bg-dark text-white border-secondary mb-3" placeholder="Password">
-                    <button class="btn btn-info w-100 text-white" onclick="changeWifi()">Connect</button>
-                    <p class="text-warning mt-3 mb-0" id="wifiStatus"></p>
-                </div>
-
-                <div class="card bg-dark text-light p-4 mt-3 border-secondary text-center">
-                    <h4 class="mb-3">Power Management</h4>
-                    <div class="d-flex justify-content-center gap-3">
-                        <button onclick="powerAction('sleep')" class="btn btn-warning">Sleep</button>
-                        <button onclick="powerAction('reboot')" class="btn btn-info text-white">Reboot</button>
-                        <button onclick="powerAction('shutdown')" class="btn btn-danger">Shutdown</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Scripts -->
-    <!-- Bootstrap -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    
-    <!-- ROSLibJS & ROS2D Dependencies -->
-    <script src="https://cdn.jsdelivr.net/npm/eventemitter2@6/lib/eventemitter2.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/easeljs/lib/easeljs.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/roslib@1/build/roslib.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/ros2d@0/build/ros2d.min.js"></script>
-    
-    <!-- Custom Application Logic -->
-    <script src="main.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/eventemitter2@6.4.9/lib/eventemitter2.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/easeljs@1.0.2/lib/easeljs.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/roslib@1.3.0/build/roslib.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/ros2d@0.10.0/build/ros2d.min.js"></script>
+  <script src="main.js"></script>
 </body>
 </html>

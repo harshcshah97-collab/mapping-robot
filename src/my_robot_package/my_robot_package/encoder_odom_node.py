@@ -32,7 +32,7 @@ class EncoderOdomNode(Node):
         self.declare_parameter("right_b", 6)
 
         self.declare_parameter("ticks_per_rev", 494.0)      # your measured value
-        self.declare_parameter("wheel_diameter", 0.060)     # meters (65mm)
+        self.declare_parameter("wheel_diameter", 0.060)     # meters (60 mm)
         self.declare_parameter("wheel_separation", 0.240)   # meters (240mm)
 
         # Direction multipliers (+1 or -1)
@@ -44,6 +44,8 @@ class EncoderOdomNode(Node):
         self.declare_parameter("publish_tf", True)
 
         self.declare_parameter("rate_hz", 30.0)
+        self.declare_parameter("force_zero_translation_while_turning", True)
+        self.declare_parameter("turn_in_place_ratio", 0.8)
 
         # --- Load params ---
         self.left_a = int(self.get_parameter("left_a").value)
@@ -64,6 +66,16 @@ class EncoderOdomNode(Node):
 
         self.rate_hz = float(self.get_parameter("rate_hz").value)
         self.dt = 1.0 / max(self.rate_hz, 1.0)
+        self.force_zero_translation_while_turning = bool(
+            self.get_parameter("force_zero_translation_while_turning").value
+        )
+        self.turn_in_place_ratio = float(
+            self.get_parameter("turn_in_place_ratio").value
+        )
+        if self.ticks_per_rev <= 0.0 or self.wheel_diameter <= 0.0:
+            raise ValueError("ticks_per_rev and wheel_diameter must be positive")
+        if self.wheel_separation <= 0.0:
+            raise ValueError("wheel_separation must be positive")
 
         # --- Encoder objects (same as your test) ---
         self.left_enc = RotaryEncoder(a=self.left_a, b=self.left_b, max_steps=0)
@@ -77,7 +89,7 @@ class EncoderOdomNode(Node):
         self.y = 0.0
         self.yaw = 0.0
 
-        self.last_time = time.time()
+        self.last_time = time.monotonic()
 
         # Publishers
         self.odom_pub = self.create_publisher(Odometry, "/odom", 10)
@@ -92,7 +104,7 @@ class EncoderOdomNode(Node):
         )
 
     def update(self):
-        now = time.time()
+        now = time.monotonic()
         dt = max(now - self.last_time, 1e-6)
         self.last_time = now
 
@@ -112,60 +124,18 @@ class EncoderOdomNode(Node):
         dl = d_left_steps * meters_per_tick
         dr = d_right_steps * meters_per_tick
 
-        # --- "PAC-MAN MODE" DEBUG VERSION ---
-        
-        # 1. Calculate the Raw turning vs. moving amounts
-        # We use absolute values to compare magnitude
+        # Optional legacy filter for bases that are commanded only straight or
+        # in-place. PWM-capable launches disable this so real arcs are retained.
         turn_magnitude = abs(dr - dl)
         move_magnitude = abs(dr + dl)
-
-        # 2. The Check: Is the robot mostly turning?
-        # We relax the check slightly (0.8) to catch sloppy turns
-        if turn_magnitude > (move_magnitude * 0.8): 
-            # LOGGING: Verify this is happening!
-            # self.get_logger().info(f"SPINNING! dl:{dl:.4f} dr:{dr:.4f} -> FORCING ds=0")
-            
-            ds = 0.0      # <--- THIS STOPS THE SLIDING
-            
-            # Use your tuned rotation formula (dr - dl) or (dl - dr)
-            # You said dr - dl was better for you previously:
-            dtheta = (dr - dl) / self.wheel_separation 
-            
+        mostly_turning = turn_magnitude > (
+            move_magnitude * self.turn_in_place_ratio
+        )
+        if self.force_zero_translation_while_turning and mostly_turning:
+            ds = 0.0
         else:
-            # Normal driving
             ds = (dr + dl) / 2.0
-            dtheta = (dr - dl) / self.wheel_separation
-
-        # Calculate raw contributions
-        # diff = dr - dl      # Rotation component (raw)
-        # summ = dr + dl      # Forward component (raw)
-        
-        # # Check: Is the robot mostly turning?
-        # # If the 'turning amount' (diff) is larger than the 'forward amount' (summ),
-        # # we assume it's INTENDED to be a spin-in-place.
-        # if abs(diff) > abs(summ):
-        #     ds = 0.0        # FORCE forward movement to zero
-        #     dtheta = diff / self.wheel_separation  # Pure rotation
-        # else:
-        #     ds = summ / 2.0 # Normal driving
-        #     dtheta = diff / self.wheel_separation
-            
-        # --- END FIX ---
-
-        # Diff-drive integration
-        # if (dl > 0 and dr < 0) or (dl < 0 and dr > 0):
-        #     # We are turning in place! 
-        #     # Force linear distance (ds) to ZERO to stop the "Walking/Drifting" on map.
-        #     ds = 0.0
-        #     # Trust the rotation completely
-        #     dtheta = (dr - dl) / self.wheel_separation # (Use dl-dr or dr-dl based on your fix)
-            
-        # else:
-        #     # Normal driving (Straight or Arcs)
-        #     ds = (dr + dl) / 2.0
-        #     dtheta = (dr - dl) / self.wheel_separation
-        # ds = (dr + dl) / 2.0
-        # dtheta = (dr - dl) / self.wheel_separation
+        dtheta = (dr - dl) / self.wheel_separation
 
         # Update pose using midpoint yaw
         yaw_mid = self.yaw + dtheta / 2.0
@@ -186,10 +156,16 @@ class EncoderOdomNode(Node):
         odom.pose.pose.position.y = float(self.y)
         odom.pose.pose.position.z = 0.0
         odom.pose.pose.orientation = yaw_to_quat(self.yaw)
+        odom.pose.covariance[0] = 0.05
+        odom.pose.covariance[7] = 0.05
+        odom.pose.covariance[35] = 0.10
 
         odom.twist.twist.linear.x = float(vx)
         odom.twist.twist.linear.y = 0.0
         odom.twist.twist.angular.z = float(vth)
+        odom.twist.covariance[0] = 0.02
+        odom.twist.covariance[7] = 0.02
+        odom.twist.covariance[35] = 0.05
 
         self.odom_pub.publish(odom)
 
@@ -206,16 +182,23 @@ class EncoderOdomNode(Node):
             t.transform.rotation = q
             self.tf_broadcaster.sendTransform(t)
 
+    def destroy_node(self):
+        self.left_enc.close()
+        self.right_enc.close()
+        super().destroy_node()
 
-def main():
-    rclpy.init()
+
+def main(args=None):
+    rclpy.init(args=args)
     node = EncoderOdomNode()
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
         pass
-    node.destroy_node()
-    rclpy.shutdown()
+    finally:
+        node.destroy_node()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__ == "__main__":

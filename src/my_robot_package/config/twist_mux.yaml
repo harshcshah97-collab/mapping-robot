@@ -1,0 +1,23 @@
+twist_mux:
+  ros__parameters:
+    # All command producers and the motor driver use geometry_msgs/Twist.
+    # twist_mux 4.5 defaults to TwistStamped unless this is explicit.
+    use_stamped: false
+    topics:
+      # Existing dashboard/keyboard teleop topic. Manual control wins while fresh.
+      teleop:
+        topic: /cmd_vel
+        timeout: 0.5
+        priority: 100
+      person_tracking:
+        topic: /cmd_vel/tracking
+        timeout: 0.5
+        priority: 60
+      navigation:
+        topic: /cmd_vel/navigation
+        timeout: 0.5
+        priority: 50
+      mapping:
+        topic: /cmd_vel/mapping
+        timeout: 0.5
+        priority: 40

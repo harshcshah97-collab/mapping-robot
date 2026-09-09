@@ -1,36 +1,83 @@
 import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import IncludeLaunchDescription
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, LogInfo
+from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import Node
-import logging
-# Set up logging to both console and file
-log_dir = os.path.expanduser('./log')
-os.makedirs(log_dir, exist_ok=True)
-log_file = os.path.join(log_dir, 'navigation_launch.log')
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s %(levelname)s %(message)s',
-    handlers=[
-        logging.StreamHandler(),            # Console
-        logging.FileHandler(log_file)       # File
-    ]
-)
-logging.info("Starting navigation launch...")
+from launch_ros.parameter_descriptions import ParameterValue
+
+
 def generate_launch_description():
     pkg_share = get_package_share_directory('my_robot_package')
     urdf_file = os.path.join(pkg_share, 'urdf', 'my_robot.urdf')
     lidar_launch_file = os.path.join(pkg_share, 'launch', 'ld19.launch.py')
-    
-    # POINT TO YOUR SAVED MAP HERE
-    map_file = os.path.expanduser('/home/harsh/ros2_ws/src/my_robot_package/maps/my_house_map_0515.yaml')
+
+    default_map_file = os.path.join(
+        pkg_share, 'maps', 'my_house_map_0515.yaml'
+    )
+    map_file = LaunchConfiguration('map')
     nav2_params_file = os.path.join(pkg_share, 'config', 'nav2_params.yaml')
+    hardware_config = os.path.join(
+        pkg_share, 'config', 'hardware_calibration.yaml'
+    )
+    twist_mux_config = os.path.join(pkg_share, 'config', 'twist_mux.yaml')
+    tracking_config = os.path.join(
+        pkg_share, 'config', 'person_tracking.yaml'
+    )
+    enable_lidar = LaunchConfiguration('enable_lidar')
+    enable_oakd_perception = LaunchConfiguration('enable_oakd_perception')
+    enable_oakd_depth_obstacles = LaunchConfiguration(
+        'enable_oakd_depth_obstacles'
+    )
+    start_oakd = PythonExpression([
+        "'", enable_oakd_perception, "' == 'true' or '",
+        enable_oakd_depth_obstacles, "' == 'true'",
+    ])
 
     with open(urdf_file, 'r') as infp:
         robot_desc = infp.read()
 
     return LaunchDescription([
+        DeclareLaunchArgument(
+            'map',
+            default_value=default_map_file,
+            description='Absolute path to the saved map YAML file.'
+        ),
+        DeclareLaunchArgument(
+            'enable_lidar',
+            default_value='true',
+            description=(
+                'Start the LD19 LiDAR. Set false only when another launch file '
+                'already owns the sensor.'
+            )
+        ),
+        DeclareLaunchArgument(
+            'enable_oakd_depth_obstacles',
+            default_value='false',
+            description=(
+                'Publish calibrated OAK-D depth into Nav2 costmaps. The camera '
+                'node refuses this unless hardware calibration marks the mount '
+                'transform as confirmed.'
+            )
+        ),
+        DeclareLaunchArgument(
+            'enable_oakd_perception',
+            default_value='false',
+            description=(
+                'Start OAK-D RGB/person perception without allowing it to publish '
+                'movement commands. LiDAR remains the Nav2 obstacle sensor.'
+            )
+        ),
+        LogInfo(
+            msg='OAK-D perception enabled for navigation (camera does not drive).',
+            condition=IfCondition(enable_oakd_perception)
+        ),
+        LogInfo(
+            msg='OAK-D depth obstacles requested for Nav2.',
+            condition=IfCondition(enable_oakd_depth_obstacles)
+        ),
         # 1. Robot State Publisher
         Node(
             package='robot_state_publisher',
@@ -40,17 +87,27 @@ def generate_launch_description():
             parameters=[{'robot_description': robot_desc}]
         ),
 
-        # 2. Hardware: Lidar
-        # IncludeLaunchDescription(
-        #     PythonLaunchDescriptionSource(lidar_launch_file)
-        # ),
+        # 2. Hardware: LiDAR
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(lidar_launch_file),
+            condition=IfCondition(enable_lidar)
+        ),
 
         # 3. Hardware: Motor Driver
+        Node(
+            package='twist_mux',
+            executable='twist_mux',
+            name='twist_mux',
+            output='screen',
+            parameters=[twist_mux_config],
+            remappings=[('/cmd_vel_out', '/cmd_vel_out')]
+        ),
         Node(
             package='my_robot_package',
             executable='motor_driver_node',
             name='motor_driver_node',
-            output='screen'
+            output='screen',
+            parameters=[hardware_config]
         ),
 
         # 4. Hardware: Encoder Odom
@@ -59,10 +116,10 @@ def generate_launch_description():
             executable='encoder_odom_node',
             name='encoder_odom_node',
             output='screen',
-            parameters=[{
+            parameters=[hardware_config, {
                 'base_frame': 'base_footprint',
                 'odom_frame': 'odom',
-                'publish_tf': False   # <--- FIX: EKF handles TF now
+                'publish_tf': False
             }]
         ),
 
@@ -71,7 +128,8 @@ def generate_launch_description():
             package='my_robot_package',
             executable='imu_node',
             name='imu_node',
-            output='screen'
+            output='screen',
+            parameters=[hardware_config]
         ),
 
         # 5a. Sensor Fusion (EKF)
@@ -86,26 +144,26 @@ def generate_launch_description():
         # 5b. Hardware: Ultrasonic Sensor
         Node(
             package='my_robot_package',
-            executable='ultra_sensor_node', 
+            executable='ultra_sensor_node',
             name='ultra_sensor_node',
             output='screen',
             parameters=[{
-                'frame_id': 'ultrasonic_link' 
+                'frame_id': 'ultrasonic_link'
             }]
         ),
 
         # 5c. Hardware: IR Sensors
         Node(
             package='my_robot_package',
-            executable='ir_driver', 
+            executable='ir_driver',
             name='ir_sensor_node',
             output='screen',
             parameters=[{
-                'left_frame_id': 'ir_left_link',   
-                'right_frame_id': 'ir_right_link'  
+                'left_frame_id': 'ir_left_link',
+                'right_frame_id': 'ir_right_link'
             }]
         ),
-        
+
         # 5d. Hardware: Bumpers
         Node(
             package='my_robot_package',
@@ -113,7 +171,7 @@ def generate_launch_description():
             name='bumper_node',
             output='screen',
             parameters=[{
-                'frame_id': 'base_footprint' 
+                'frame_id': 'base_footprint'
             }]
         ),
 
@@ -126,12 +184,32 @@ def generate_launch_description():
             parameters=[{'port': 8765}]
         ),
 
+        # 6a. Optional camera intelligence/recording layer. It never publishes
+        # cmd_vel here, so it cannot fight Nav2 for control of the motors.
+        Node(
+            package='my_robot_package',
+            executable='person_follower_node',
+            name='oakd_perception_node',
+            output='screen',
+            parameters=[tracking_config, hardware_config, {
+                'initial_mode': 'idle',
+                'motion_enabled': False,
+                'require_lidar': False,
+                'publish_preview': True,
+                'publish_pointcloud': ParameterValue(
+                    enable_oakd_depth_obstacles, value_type=bool
+                ),
+            }],
+            condition=IfCondition(start_oakd)
+        ),
+
         # 7. NAV2 NODES (Explicitly launched)
         Node(
             package='nav2_controller',
             executable='controller_server',
             output='screen',
-            parameters=[nav2_params_file]
+            parameters=[nav2_params_file],
+            remappings=[('/cmd_vel', '/cmd_vel/navigation')]
         ),
         Node(
             package='nav2_planner',
@@ -145,7 +223,8 @@ def generate_launch_description():
             executable='behavior_server',
             name='behavior_server',
             output='screen',
-            parameters=[nav2_params_file]
+            parameters=[nav2_params_file],
+            remappings=[('/cmd_vel', '/cmd_vel/navigation')]
         ),
         Node(
             package='nav2_bt_navigator',

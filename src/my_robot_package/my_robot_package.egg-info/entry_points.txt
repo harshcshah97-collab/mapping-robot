@@ -1,4 +1,0 @@
-[console_scripts]
-mpu6050_node = my_robot_package.mpu6050_node:main
-open_loop_odom = my_robot_package.open_loop_odom:main
-ultrasonic_node = my_robot_package.ultrasonic_node:main

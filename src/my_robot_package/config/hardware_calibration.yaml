@@ -1,0 +1,59 @@
+motor_driver_node:
+  ros__parameters:
+    # All full-stack launch files route behavior commands through twist_mux.
+    command_topic: /cmd_vel_out
+    command_timeout_sec: 0.6
+    control_rate_hz: 30.0
+
+    # Provisional values copied from the existing encoder/Nav2 configuration.
+    # Run the physical calibration checklist before setting the two switches true.
+    wheel_separation_m: 0.240
+    max_wheel_speed_mps: 0.22
+    minimum_pwm: 0.28
+    wheel_calibration_confirmed: false
+    closed_loop_enabled: false
+    kp: 0.8
+    ki: 0.2
+    integral_limit: 0.4
+    odom_topic: /odom
+
+    left_in1_gpio: 23
+    left_in2_gpio: 22
+    right_in1_gpio: 17
+    right_in2_gpio: 27
+
+encoder_odom_node:
+  ros__parameters:
+    left_a: 13
+    left_b: 19
+    right_a: 5
+    right_b: 6
+    ticks_per_rev: 494.0
+    wheel_diameter: 0.060
+    wheel_separation: 0.240
+    left_dir: -1
+    right_dir: 1
+    force_zero_translation_while_turning: false
+
+imu_node:
+  ros__parameters:
+    i2c_bus: 1
+    i2c_address: 104
+    frame_id: imu_link
+    publish_rate_hz: 50.0
+    # Provisional offsets from the snapshot. Re-measure with the robot still.
+    gyro_offset_x_deg_s: -5.74
+    gyro_offset_y_deg_s: -0.79
+    gyro_offset_z_deg_s: -0.57
+
+person_follower_node:
+  ros__parameters:
+    # Depth obstacles are refused until this is true. Update the matching OAK-D
+    # joint in the URDF at the same time as confirming the measured transform.
+    oakd_extrinsics_calibrated: false
+    oakd_depth_benchmark_passed: false
+
+oakd_perception_node:
+  ros__parameters:
+    oakd_extrinsics_calibrated: false
+    oakd_depth_benchmark_passed: false

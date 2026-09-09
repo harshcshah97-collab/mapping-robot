@@ -1,0 +1,20 @@
+[Unit]
+Description=Robot Companion Web Dashboard
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=harsh
+Environment="ROBOT_WS=/home/harsh/ros2_ws"
+Environment="PYTHONUNBUFFERED=1"
+WorkingDirectory=/home/harsh/ros2_ws/src/my_robot_package/web_ui
+ExecStart=/usr/bin/python3 -u /home/harsh/ros2_ws/src/my_robot_package/web_ui/robot_web_server.py
+Restart=on-failure
+RestartSec=5
+KillSignal=SIGINT
+KillMode=control-group
+TimeoutStopSec=20
+
+[Install]
+WantedBy=multi-user.target

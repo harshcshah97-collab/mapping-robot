@@ -1,0 +1,64 @@
+/**:
+  ros__parameters:
+    # Safe default: detect and publish status, but do not move until commanded.
+    initial_mode: idle
+    # Stable OAK-D Lite path. The normal launch runs this through the dedicated
+    # DepthAI 2.32 virtual environment instead of the crashing DepthAI 3 runtime.
+    blob_path: /home/harsh/ros2_ws/src/depthai-ros/depthai_examples/resources/mobilenet-ssd_openvino_2021.2_6shave.blob
+    blob_sha256: 5150d0e5d18abd0ecb21c8280e09870977358c04a7d2cfa539e1e0f6c2a93e71
+
+    target_distance_m: 0.60
+    distance_deadband_m: 0.00
+    center_deadband: 0.10
+    smoothing_alpha: 0.30
+
+    # Independent wheel PWM permits slow visual-servo arcs while keeping the
+    # target in frame. Final values still need on-robot tuning.
+    turn_speed: 0.30
+    follow_speed: 0.10
+    control_rate_hz: 15.0
+    target_timeout_sec: 0.8
+
+    minimum_valid_depth_m: 0.40
+    maximum_valid_depth_m: 4.5
+
+    front_sector_degrees: 50.0
+    # Apartment tuning: LiDAR is allowed closer than before, while short-range
+    # ultrasonic and IR sensors independently protect the near field.
+    lidar_stop_distance_m: 0.30
+    range_stop_distance_m: 0.20
+    sensor_timeout_sec: 0.75
+    bumper_hold_sec: 1.0
+    require_lidar: true
+    require_ultrasonic: true
+    require_ir: true
+    require_bumper: true
+    # TEMPORARY DEGRADED MODE: the left FC-51 is continuously asserted in open
+    # space, so require agreement from both IR channels. Both heartbeats are
+    # still mandatory. Restore false after repairing/calibrating the left unit.
+    ir_stop_requires_both: true
+    motion_enabled: true
+
+    # Leave false for normal operation. The launch can explicitly override this
+    # for a supervised run; undervoltage and the absolute limit still stop motion.
+    allow_hot_operation: false
+    maximum_run_pi_temp_c: 75.0
+    absolute_stop_pi_temp_c: 95.0
+    maximum_oak_temp_c: 85.0
+
+    publish_preview: true
+    publish_pointcloud: false
+    pointcloud_decimation: 8
+    recording_fps: 15.0
+    max_recording_duration_sec: 600.0
+    minimum_free_disk_mb: 512.0
+    recording_directory: "~/robot_recordings"
+
+    # This is a local clothing-color signature, not face recognition. Enroll in
+    # roughly the same lighting/clothing expected during the session.
+    reidentification_enabled: true
+    # Follow/framing refuses to move until the user explicitly enrolls the
+    # visible subject. This prevents the old nearest-person fallback.
+    require_enrollment_for_motion: true
+    reid_match_threshold: 0.35
+    enrollment_file: "~/.config/mapping-robot/target_enrollment.json"
